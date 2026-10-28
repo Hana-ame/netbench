@@ -130,12 +130,57 @@ app.get('/api/info', (req, res) => {
 });
 
 /* ------------------------------------------------------------------ */
-/* WebSocket 回声端点（/ws）                                            */
+/* WebSocket 端点（/ws）                                                */
+/* 默认行为 = 回声（保留「测速(回显)」与 ping）；扩展协议：              */
+/*   {m:'down',size,id}   → 服务端推送 size 字节二进制（下行测速）       */
+/*   {m:'upStart',size,id} → 进入上行计数；收满 size 字节回 {m:'upDone'} */
+/* 其余（含 {m:'ping'}、二进制）仍原样回声。                            */
 /* ------------------------------------------------------------------ */
 const echoWSS = new WebSocketServer({ noServer: true, path: '/ws' });
+const WSS_CHUNK = 64 * 1024;
+const WSS_MAX = 512 * 1024 * 1024;
 echoWSS.on('connection', (ws) => {
   ws.send(JSON.stringify({ type: 'hello', t: Date.now() }));
-  ws.on('message', (data, isBinary) => ws.send(data, { binary: isBinary }));
+  let upMode = null; // { id, size, got }
+
+  const sendBytes = (size, id) => {
+    size = Math.max(0, Math.min(size || 0, WSS_MAX));
+    const chunk = Buffer.alloc(WSS_CHUNK, 0x5a);
+    let sent = 0;
+    const pump = () => {
+      while (sent < size) {
+        const n = Math.min(WSS_CHUNK, size - sent);
+        sent += n;
+        ws.send(n === WSS_CHUNK ? chunk : chunk.subarray(0, n), { binary: true });
+        if (ws.bufferedAmount > 8 * 1024 * 1024) { setTimeout(pump, 10); return; }
+      }
+    };
+    pump();
+  };
+
+  ws.on('message', (data, isBinary) => {
+    if (!isBinary) {
+      // JSON 控制消息
+      try {
+        const m = JSON.parse(data.toString());
+        if (m && m.m === 'down') { sendBytes(m.size, m.id); return; }
+        if (m && m.m === 'upStart') { upMode = { id: m.id, size: m.size || 0, got: 0 }; return; }
+      } catch (e) { /* 非 JSON 文本，按回声处理 */ }
+      ws.send(data, { binary: false });
+      return;
+    }
+    // 二进制
+    if (upMode) {
+      upMode.got += data.length;
+      if (upMode.got >= upMode.size) {
+        const { id, got } = upMode;
+        upMode = null;
+        ws.send(JSON.stringify({ m: 'upDone', size: got, id }));
+      }
+      return;
+    }
+    ws.send(data, { binary: true }); // 回声
+  });
 });
 
 // 手动 upgrade 路由：按路径分发到对应 WSS，避免多个 WSS 在共享 server 上互踩

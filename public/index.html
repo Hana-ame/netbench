@@ -170,17 +170,21 @@
         <button id="btnWsConnect" class="primary">连接</button>
         <button id="btnWsDisconnect">断开</button>
         <button id="btnWsPing">WS 延迟</button>
+        <button id="btnWsDown">WS 下行</button>
+        <button id="btnWsUp">WS 上行</button>
         <button id="btnWsSpeed">测速(回显)</button>
       </div>
       <div class="metrics" id="wsMetrics">
         <div class="metric"><div class="k">连接耗时</div><div class="v" id="m_ws_conn">—</div></div>
         <div class="metric"><div class="k">WS 延迟</div><div class="v" id="m_ws_ping">—</div></div>
+        <div class="metric"><div class="k">下载</div><div class="v" id="m_ws_down">—</div></div>
+        <div class="metric"><div class="k">上传</div><div class="v" id="m_ws_up">—</div></div>
         <div class="metric"><div class="k">吞吐(往返)</div><div class="v" id="m_ws_speed">—</div></div>
         <div class="metric"><div class="k">状态</div><div class="v" id="m_ws_status">未连接</div></div>
       </div>
     </div>
     <div class="log" id="httpLog"></div>
-    <div class="hint">提示：本服务内置 <code>/api/blob?size=…</code>（下行）、<code>/api/ping</code>（延迟）、<code>/ws</code>（回显）端点；输入框默认已填好本服务地址。</div>
+    <div class="hint">提示：本服务内置 <code>/api/blob?size=…</code>（下行）、<code>POST /api/upload</code>（上行）、<code>/api/ping</code>（延迟）、<code>/ws</code>（上下行 + 回显）端点；输入框默认已填好本服务地址。</div>
   </section>
 </main>
 
@@ -538,12 +542,80 @@ function setWsStatus(txt, cls) {
   else if (cls === 'err') $('m_ws_status').style.color = 'var(--err)';
   else $('m_ws_status').style.color = '';
 }
+
+/* ---- WS 上下行协议：与 /ws 服务端约定 ---- */
+let wsState = { down: null, up: null }; // { id, size, t0, resolve } 各一
+function wireWsProtocol(w) {
+  w.addEventListener('message', (ev) => {
+    const d = ev.data;
+    // JSON 控制消息（服务端 → 客户端）：upDone
+    if (typeof d === 'string' || (d instanceof ArrayBuffer && d.byteLength < 4096)) {
+      try {
+        const m = JSON.parse(typeof d === 'string' ? d : new TextDecoder().decode(d));
+        if (m && m.m === 'upDone' && wsState.up && m.id === wsState.up.id) {
+          const st = wsState.up; wsState.up = null;
+          const dt = now() - st.t0;
+          const mbps = fmtMbps(m.size || st.size, dt);
+          $('m_ws_up').innerHTML = `${mbps} <small>Mbps</small>`;
+          log(httpLog, `WS 上行: ${((m.size || st.size) / 1048576).toFixed(1)} MB 总 ${fmtMs(dt)} → ${mbps} Mbps`, 'ok');
+          if (st.resolve) st.resolve({ dt });
+        }
+      } catch (e) { /* 非 JSON，忽略 */ }
+      return;
+    }
+    // 二进制：计入进行中的下行测速
+    if (wsState.down) {
+      const st = wsState.down;
+      st.got += (d.byteLength !== undefined ? d.byteLength : (d.size || 0));
+      if (st.got >= st.size) {
+        wsState.down = null;
+        const dt = now() - st.t0;
+        const mbps = fmtMbps(st.size, dt);
+        $('m_ws_down').innerHTML = `${mbps} <small>Mbps</small>`;
+        log(httpLog, `WS 下行: ${(st.size / 1048576).toFixed(1)} MB 总 ${fmtMs(dt)} → ${mbps} Mbps`, 'ok');
+        if (st.resolve) st.resolve({ dt });
+      }
+    }
+  });
+}
+
+// WS 下行：请求 size 字节，服务端推送，按请求→收满计时
+function wsDownload(w, size) {
+  return new Promise((resolve, reject) => {
+    const id = 'd' + Date.now();
+    wsState.down = { id, size, got: 0, t0: now(), resolve };
+    w.send(JSON.stringify({ m: 'down', size, id }));
+    setTimeout(() => { if (wsState.down && wsState.down.id === id) { wsState.down = null; reject(new Error('WS 下行超时')); } }, 30000);
+  });
+}
+
+// WS 上行：先发 upStart，再发 size 字节（分块+背压），等 upDone 计时
+function wsUpload(w, size) {
+  return new Promise((resolve, reject) => {
+    const id = 'u' + Date.now();
+    wsState.up = { id, size, t0: now(), resolve };
+    w.send(JSON.stringify({ m: 'upStart', size, id }));
+    const chunk = new ArrayBuffer(64 * 1024); new Uint8Array(chunk).fill(0x5a);
+    let sent = 0;
+    const pump = () => {
+      while (sent < size) {
+        const n = Math.min(64 * 1024, size - sent);
+        sent += n;
+        w.send(n === 64 * 1024 ? chunk : chunk.slice(0, n));
+        if (w.bufferedAmount > 8 * 1024 * 1024) { setTimeout(pump, 10); return; }
+      }
+    };
+    pump();
+    setTimeout(() => { if (wsState.up && wsState.up.id === id) { wsState.up = null; reject(new Error('WS 上行超时')); } }, 30000);
+  });
+}
+
 function wsConnect(url) {
   return new Promise((resolve, reject) => {
     const s = now();
     const w = new WebSocket(url);
     w.binaryType = 'arraybuffer';
-    w.onopen = () => { $('m_ws_conn').innerHTML = `${(now() - s).toFixed(1)} <small>ms</small>`; setWsStatus('已连接', 'ok'); log(httpLog, `WS 已连接 ${url}（${(now() - s).toFixed(1)}ms）`, 'ok'); resolve(w); };
+    w.onopen = () => { $('m_ws_conn').innerHTML = `${(now() - s).toFixed(1)} <small>ms</small>`; setWsStatus('已连接', 'ok'); log(httpLog, `WS 已连接 ${url}（${(now() - s).toFixed(1)}ms）`, 'ok'); wireWsProtocol(w); resolve(w); };
     w.onerror = () => { setWsStatus('错误', 'err'); reject(new Error('WS 连接失败: ' + url)); };
   });
 }
@@ -591,6 +663,8 @@ $('btnHttpStop').onclick = () => { /* fetch 不可中断，占位 */ log(httpLog
 $('btnWsConnect').onclick = () => { if (ws) ws.close(); wsConnect($('wsUrl').value.trim()).then(w => { ws = w; }).catch(e => log(httpLog, e.message, 'err')); };
 $('btnWsDisconnect').onclick = () => { if (ws) { ws.close(); ws = null; setWsStatus('未连接', ''); } };
 $('btnWsPing').onclick = () => { if (!ws) { log(httpLog, '先连接 WS', 'warn'); return; } wsPing(ws).catch(e => log(httpLog, e.message, 'err')); };
+$('btnWsDown').onclick = () => { if (!ws) { log(httpLog, '先连接 WS', 'warn'); return; } wsDownload(ws, parseInt($('wsSize').value, 10)).catch(e => log(httpLog, e.message, 'err')); };
+$('btnWsUp').onclick = () => { if (!ws) { log(httpLog, '先连接 WS', 'warn'); return; } wsUpload(ws, parseInt($('wsSize').value, 10)).catch(e => log(httpLog, e.message, 'err')); };
 $('btnWsSpeed').onclick = () => { if (!ws) { log(httpLog, '先连接 WS', 'warn'); return; } wsSpeed(ws, parseInt($('wsSize').value, 10)).catch(e => log(httpLog, e.message, 'err')); };
 
 /* ==================================================================== */

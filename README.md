@@ -31,7 +31,7 @@ npm start            # node server.js
 - **HTTP 延迟**：对目标 URL 做 5 次 GET，统计 avg/min/max。
 - **GET 测速（下行）**：流式读取响应，给出 TTFB、总耗时、下载速度（Mbps）。
 - **HTTP 上行**：POST size 字节到目标，按请求-响应往返计时，给出上传速度（Mbps）。
-- **WS 连接**：测连接耗时；**WS 延迟**：JSON ping/pong 回显；**测速（回显）**：发送大数据并等完整回显，按往返计算吞吐。
+- **WS 连接**：测连接耗时；**WS 延迟**：JSON ping/pong 回显；**WS 下行**：请求 `size` 字节，服务端推送，按请求→收满计时；**WS 上行**：分块上传 `size` 字节，服务端计数满回 `upDone`，按发送→应答计时；**测速（回显）**：发送大数据并等完整回显，按往返计算吞吐。
 
 内置端点（页面输入框已默认填好）：
 
@@ -40,7 +40,7 @@ npm start            # node server.js
 | `/api/ping` | HTTP 延迟探测 |
 | `/api/blob?size=1048576` | 下行吞吐（默认 1 MB，上限 512 MB，流式不占内存） |
 | `POST /api/upload` | 上行吞吐（上限 512 MB，POST 请求体计数并回显收到字节数） |
-| `/ws` | WebSocket 回声 |
+| `/ws` | WebSocket 回声 + 上下行协议（`down` / `upStart` / `upDone`） |
 | `/api/info` | 服务信息 |
 | `/peerjs/` | PeerJS 信令 HTTP 信息 |
 | `/peerjs/peerjs/peers` | 在线对端列表（allow_discovery） |
