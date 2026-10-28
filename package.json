@@ -1,0 +1,16 @@
+{
+  "name": "netbench",
+  "version": "1.0.0",
+  "description": "PeerJS + HTTP/WS 网络测速工具，单端口 8080 服务 HTML",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.19.2",
+    "peer": "^1.0.2",
+    "peerjs": "^1.5.5",
+    "ws": "^8.18.0"
+  }
+}
