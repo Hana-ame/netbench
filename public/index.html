@@ -131,10 +131,25 @@
         <button id="btnHttpGet" class="primary">GET 测速</button>
         <button id="btnHttpStop">停止</button>
       </div>
+      <div class="row">
+        <label>上传 URL</label>
+        <input id="httpUploadUrl" value="">
+      </div>
+      <div class="row">
+        <label>数据量</label>
+        <select id="httpSize">
+          <option value="1048576">1 MB</option>
+          <option value="4194304" selected>4 MB</option>
+          <option value="16777216">16 MB</option>
+          <option value="67108864">64 MB</option>
+        </select>
+        <button id="btnHttpUp" class="primary">HTTP 上行</button>
+      </div>
       <div class="metrics" id="httpMetrics">
         <div class="metric"><div class="k">HTTP 延迟</div><div class="v" id="m_http_ping">—</div></div>
         <div class="metric"><div class="k">TTFB</div><div class="v" id="m_http_ttfb">—</div></div>
         <div class="metric"><div class="k">下载</div><div class="v" id="m_http_down">—</div></div>
+        <div class="metric"><div class="k">上传</div><div class="v" id="m_http_up">—</div></div>
         <div class="metric"><div class="k">状态</div><div class="v" id="m_http_status">—</div></div>
       </div>
     </div>
@@ -459,6 +474,7 @@ const httpLog = $('httpLog');
 const proto = location.protocol === 'https:' ? 'wss' : 'ws';
 $('httpUrl').value = `${location.origin}/api/blob?size=1048576`;
 $('pingUrl').value = `${location.origin}/api/ping`;
+$('httpUploadUrl').value = `${location.origin}/api/upload`;
 $('wsUrl').value = `${proto}://${location.hostname}${location.port ? ':' + location.port : ''}/ws`;
 
 async function httpPing(url, n = 5) {
@@ -496,6 +512,23 @@ async function httpGet(url) {
   $('m_http_status').textContent = res.status;
   log(httpLog, `GET ${res.status}: ${(total / 1048576).toFixed(2)} MB  总 ${fmtMs(dt)}  TTFB ${ttfb.toFixed(1)}ms  → ${mbps} Mbps`, 'ok');
   return { total, dt, ttfb };
+}
+
+// HTTP 上行：POST size 字节，按请求-响应往返计时（服务端收到即回，计时≈上传时间+RTT）
+async function httpUpload(url, size) {
+  log(httpLog, `HTTP 上行测速 ${url}（${(size / 1048576).toFixed(0)} MB）…`, 'mut');
+  const payload = new Uint8Array(size); payload.fill(0x5a);
+  const s = now();
+  const res = await fetch(url, { method: 'POST', body: payload, headers: { 'Content-Type': 'application/octet-stream' } });
+  const j = await res.json();
+  const dt = now() - s;
+  const mbps = fmtMbps(size, dt);
+  $('m_http_up').innerHTML = `${mbps} <small>Mbps</small>`;
+  $('m_http_status').textContent = res.status;
+  const got = (j && j.size !== undefined) ? j.size : null;
+  const mismatch = got !== null && got !== size ? `（服务端收到 ${(got / 1048576).toFixed(2)} MB，不一致）` : '';
+  log(httpLog, `POST ${res.status}: 发送 ${(size / 1048576).toFixed(2)} MB 总 ${fmtMs(dt)} → ${mbps} Mbps ${mismatch}`, 'ok');
+  return { dt, got };
 }
 
 let ws = null;
@@ -553,6 +586,7 @@ function wsSpeed(w, size) {
 
 $('btnHttpPing').onclick = () => { const u = $('pingUrl').value.trim(); if (!u) return; httpPing(u).catch(e => log(httpLog, 'HTTP 延迟失败: ' + e.message, 'err')); };
 $('btnHttpGet').onclick = () => { const u = $('httpUrl').value.trim(); if (!u) return; httpGet(u).catch(e => log(httpLog, 'GET 失败: ' + e.message, 'err')); };
+$('btnHttpUp').onclick = () => { const u = $('httpUploadUrl').value.trim(); if (!u) return; httpUpload(u, parseInt($('httpSize').value, 10)).catch(e => log(httpLog, 'HTTP 上行失败: ' + e.message, 'err')); };
 $('btnHttpStop').onclick = () => { /* fetch 不可中断，占位 */ log(httpLog, '（当前实现未支持中断进行中的 fetch）', 'mut'); };
 $('btnWsConnect').onclick = () => { if (ws) ws.close(); wsConnect($('wsUrl').value.trim()).then(w => { ws = w; }).catch(e => log(httpLog, e.message, 'err')); };
 $('btnWsDisconnect').onclick = () => { if (ws) { ws.close(); ws = null; setWsStatus('未连接', ''); } };

@@ -104,9 +104,29 @@ app.get('/api/blob', (req, res) => {
   pump();
 });
 
+// 上行吞吐：接受 POST 请求体并计数（上限 512MB），返回收到的字节数
+app.post('/api/upload', (req, res) => {
+  const MAX = 512 * 1024 * 1024;
+  let size = 0, done = false;
+  req.on('data', (c) => {
+    size += c.length;
+    if (size > MAX && !done) {
+      done = true;
+      res.status(413).json({ ok: false, error: 'too large', max: MAX });
+      req.destroy();
+    }
+  });
+  req.on('end', () => {
+    if (!done) { done = true; res.json({ ok: true, size, t: Date.now(), server: 'netbench' }); }
+  });
+  req.on('error', () => {
+    if (!done) { done = true; res.status(500).json({ ok: false, error: 'stream error' }); }
+  });
+});
+
 // 服务信息
 app.get('/api/info', (req, res) => {
-  res.json({ ok: true, server: 'netbench', port: PORT, peerPath: '/peerjs', wsPath: '/ws' });
+  res.json({ ok: true, server: 'netbench', port: PORT, peerPath: '/peerjs', wsPath: '/ws', uploadPath: '/api/upload' });
 });
 
 /* ------------------------------------------------------------------ */
@@ -136,5 +156,5 @@ server.listen(PORT, HOST, () => {
   console.log(`[netbench] listening  http://${HOST}:${PORT}/`);
   console.log(`[netbench] peerjs      ws://<host>:${PORT}/peerjs/peerjs   (client path: /peerjs)`);
   console.log(`[netbench] ws echo     ws://<host>:${PORT}/ws`);
-  console.log(`[netbench] api         /api/ping  /api/blob?size=1048576  /api/info`);
+  console.log(`[netbench] api         /api/ping  /api/blob?size=1048576  POST /api/upload  /api/info`);
 });
