@@ -273,7 +273,6 @@ function initServerPeer() {
 
       srvPeer.on('connection', (c) => {
         console.log(`[server-peer] + browser client connected: ${c.peer}`);
-        let downSession = null;
         let upSession = null;
 
         c.on('data', (data) => {
@@ -284,60 +283,32 @@ function initServerPeer() {
               c.send(JSON.stringify({ m: 'pong', id: m.id }));
             } else if (m && m.m === 'req') {
               console.log(`[server-peer] start downlink test for ${c.peer}, size=${m.size}`);
-              const windowSize = m.window ? (m.window * CHUNK) : Math.min(m.size, 16 * 1024 * 1024);
-              let sent = 0;
-              let acked = 0;
-              let watchdogTimer = null;
-
+              let offset = 0;
               const pump = () => {
-                if (!c.open) { clearTimeout(watchdogTimer); return; }
-                while (sent < m.size && (sent - acked) < windowSize) {
-                  const n = Math.min(CHUNK, m.size - sent);
+                if (!c.open) return;
+                let inBatch = 0;
+                while (offset < m.size && inBatch < 1024 * 1024) {
+                  const n = Math.min(CHUNK, m.size - offset);
                   c.send(n === CHUNK ? chunkBuf : chunkBuf.subarray(0, n));
-                  sent += n;
+                  offset += n;
+                  inBatch += n;
                 }
-                if (sent >= m.size && acked >= m.size) {
-                  clearTimeout(watchdogTimer);
-                  console.log(`[server-peer] downlink stream complete for ${c.peer}, sending got`);
+                if (offset < m.size) {
+                  setImmediate ? setImmediate(pump) : setTimeout(pump, 0);
+                } else {
+                  console.log(`[server-peer] downlink stream complete for ${c.peer}, size=${m.size}`);
                   c.send(JSON.stringify({ m: 'got', size: m.size, id: m.id }));
-                  downSession = null;
-                  return;
-                }
-                // Watchdog: 如果对端 ACK 迟延或未发，20ms 后自动推进，确保高带宽吞吐不卡顿
-                clearTimeout(watchdogTimer);
-                if (sent < m.size && (sent - acked) >= windowSize) {
-                  watchdogTimer = setTimeout(() => {
-                    acked = sent;
-                    pump();
-                  }, 20);
-                }
-              };
-
-              downSession = {
-                id: m.id,
-                size: m.size,
-                onAck: (got) => {
-                  acked = Math.max(acked, got);
-                  pump();
                 }
               };
               pump();
-            } else if (m && m.m === 'ack' && downSession && m.id === downSession.id) {
-              downSession.onAck(m.got || 0);
             } else if (m && m.m === 'send') {
               console.log(`[server-peer] start uplink test for ${c.peer}, size=${m.size}`);
-              upSession = { size: m.size, id: m.id, got: 0, ackBatch: 0 };
+              upSession = { size: m.size, id: m.id, got: 0 };
             }
           } else {
             const bytes = data.byteLength !== undefined ? data.byteLength : (data.length || 0);
             if (upSession) {
               upSession.got += bytes;
-              upSession.ackBatch += bytes;
-              // 聚合 ACK：每累积 256KB 或收满才回一次 ACK，减少反向链路拥塞
-              if (upSession.ackBatch >= 256 * 1024 || upSession.got >= upSession.size) {
-                upSession.ackBatch = 0;
-                c.send(JSON.stringify({ m: 'ack', id: upSession.id, got: upSession.got }));
-              }
               if (upSession.got >= upSession.size) {
                 console.log(`[server-peer] uplink stream complete for ${c.peer}, got=${upSession.got}`);
                 c.send(JSON.stringify({ m: 'got', size: upSession.size, id: upSession.id }));
@@ -349,7 +320,6 @@ function initServerPeer() {
 
         c.on('close', () => {
           console.log(`[server-peer] - browser client disconnected: ${c.peer}`);
-          downSession = null;
           upSession = null;
         });
 

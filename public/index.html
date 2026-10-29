@@ -974,10 +974,6 @@ function bindPeerConn(c) {
       } else if (m.m === 'pong') {
         const p = st.pingMap.get(m.id);
         if (p) { st.pingMap.delete(m.id); p.resolve(now() - p.start); }
-      } else if (m.m === 'ack') {
-        if (st.onUploadAck && m.id === st.uploadId) {
-          st.onUploadAck(m.got || 0);
-        }
       } else if (m.m === 'got') {
         if (st.downloadResolve && (!m.id || m.id === st.downloadId)) {
           const r = st.downloadResolve;
@@ -988,7 +984,6 @@ function bindPeerConn(c) {
         if (st.uploadResolve && (!m.id || m.id === st.uploadId)) {
           const r = st.uploadResolve;
           st.uploadResolve = null;
-          st.onUploadAck = null;
           r.resolve();
         }
       }
@@ -996,15 +991,8 @@ function bindPeerConn(c) {
       const bytes = data.byteLength !== undefined ? data.byteLength : (data.size || 0);
       if (st.expectedDownload > 0) {
         st.downloadReceived += bytes;
-        st.downloadAckBatch = (st.downloadAckBatch || 0) + bytes;
         const pct = Math.min(99, Math.floor((st.downloadReceived / st.expectedDownload) * 100));
         $('valPeerDown').innerHTML = `${pct}<span class="metric-unit">%</span>`;
-
-        // 滑动窗口确认：每累积 256KB 或收满时向服务端发送 ACK，大幅降低反向 ACK 开销
-        if (st.downloadAckBatch >= 256 * 1024 || st.downloadReceived >= st.expectedDownload) {
-          st.downloadAckBatch = 0;
-          c.send(JSON.stringify({ m: 'ack', id: st.downloadId, got: st.downloadReceived }));
-        }
 
         if (st.downloadReceived >= st.expectedDownload) {
           const r = st.downloadResolve;
@@ -1136,7 +1124,6 @@ async function runPeerDownload() {
       }, timeoutMs);
       peerConnState.expectedDownload = size;
       peerConnState.downloadReceived = 0;
-      peerConnState.downloadAckBatch = 0;
       peerConnState.downloadId = id;
       peerConnState.downloadResolve = {
         resolve: () => {
@@ -1144,9 +1131,7 @@ async function runPeerDownload() {
           resolve();
         }
       };
-      // 开启大窗口流水线流控 (允许整包/最大 16MB in flight，完全释放高延迟大带宽吞吐)
-      const winChunks = Math.min(1024, Math.max(64, Math.ceil(size / 16384)));
-      c.send(JSON.stringify({ m: 'req', size, id, window: winChunks }));
+      c.send(JSON.stringify({ m: 'req', size, id }));
     });
 
     const dt = now() - s;
@@ -1183,7 +1168,6 @@ async function runPeerUpload() {
         size,
         resolve: () => {
           clearTimeout(timer);
-          peerConnState.onUploadAck = null;
           resolve();
         }
       };
@@ -1192,32 +1176,24 @@ async function runPeerUpload() {
       const chunk = new ArrayBuffer(CHUNK);
       new Uint8Array(chunk).fill(0x5a);
       let sent = 0;
-      let acked = 0;
-      const windowSize = Math.min(size, 16 * 1024 * 1024); // 最大 16MB in-flight
 
       const pump = () => {
-        while (sent < size && (sent - acked) < windowSize) {
+        const dc = c.dataChannel;
+        while (sent < size) {
+          if (dc && dc.bufferedAmount > 4 * 1024 * 1024) {
+            setTimeout(pump, 4);
+            return;
+          }
           const n = Math.min(CHUNK, size - sent);
           c.send(n === CHUNK ? chunk : chunk.slice(0, n));
           sent += n;
+          const pct = Math.min(99, Math.floor((sent / size) * 100));
+          $('valPeerUp').innerHTML = `${pct}<span class="metric-unit">%</span>`;
         }
       };
 
-      peerConnState.onUploadAck = (serverGot) => {
-        acked = serverGot;
-        const pct = Math.min(99, Math.floor((acked / size) * 100));
-        $('valPeerUp').innerHTML = `${pct}<span class="metric-unit">%</span>`;
-        pump();
-        if (acked >= size) {
-          clearTimeout(timer);
-          peerConnState.uploadResolve = null;
-          peerConnState.onUploadAck = null;
-          resolve();
-        }
-      };
-
-      c.send(JSON.stringify({ m: 'send', size, id, window: Math.min(1024, Math.ceil(size / 16384)) }));
-      pump();
+      c.send(JSON.stringify({ m: 'send', size, id }));
+      setTimeout(pump, 10);
     });
 
     const dt = now() - s;
