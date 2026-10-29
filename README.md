@@ -1,64 +1,107 @@
-# netbench —— 单端口网络测速工具
+# netbench —— 单端口全栈网络测速工具
 
-监听 **8080**，在一个端口上同时提供测速页面、PeerJS 信令服务器、HTTP 测试端点和 WebSocket 回声端点。
+[![CI/CD Pipeline](https://github.com/Hana-ame/netbench/actions/workflows/ci.yml/badge.svg)](https://github.com/Hana-ame/netbench/actions/workflows/ci.yml)
+[![Docker Image](https://img.shields.io/badge/docker-ghcr.io-blue.svg)](https://github.com/Hana-ame/netbench/pkgs/container/netbench)
+[![Node.js](https://img.shields.io/badge/node-%3E%3D20.0.0-green.svg)](https://nodejs.org)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
+监听 **8080** 单端口，同时提供现代化全功能测速 Web UI、内置 Node.js WebRTC 测速端点、PeerJS 信令服务、HTTP 延迟与上下行端点以及 WebSocket 双向测速服务。
+
+---
+
+## ⚡ 特性亮点
+
+- **全协议三分类架构**：现代化深色仪表盘，清晰分为 **🌐 HTTP**、**⚡ WebSocket**、**🔗 WebRTC (PeerJS)** 三大核心板块。
+- **极简单一服务器 URL**：告别繁琐的主机、端口、HTTPS 下拉框；只需输入一个基础 URL（例如 `https://example.com`），自动解析派生所有 HTTP、WS (`ws://` / `wss://`) 和 WebRTC 信令端点。
+- **真正服务端直连 WebRTC 测速**：服务端基于 `node-datachannel` 运行内置 Peer 节点（ID: `server`），浏览器直接与 8080 服务器测速，无需打开两个网页建立 P2P。
+- **高延迟/公网优化流控**：
+  - 16 KB MTU 安全分块 + SCTP 发送缓冲区（`bufferedAmount`）背压控制，彻底杜绝跨公网时 WebRTC 数据通道消息溢出及丢包死锁。
+  - 测速互斥锁保护，防止并发测试拥塞链路。
+  - 动态传输超时与实时百分比传输进度（`0%` → `99%` → `Mbps`）。
+- **自动化测试套件 (Testbench)**：提供包含 7 大测试项的 CLI 自动化基准测试工具，开箱支持 CI/CD 流水线。
+
+---
 
 ## 快速开始
 
+### 方式 1：Node.js 本地运行
+
 ```bash
-cd tools/netbench
-npm install          # 首次
-npm start            # node server.js
-# 打开 http://localhost:8080/
+git clone git@github.com:Hana-ame/netbench.git
+cd netbench
+npm install
+npm start
+# 浏览器访问 http://localhost:8080/
 ```
 
-- 默认监听 `0.0.0.0:8080`；`PORT=9090 node server.js` 换端口，`DEBUG=1` 开 peerjs 调试日志。
-- 页面与信令共用 8080，PeerJS 客户端 `path` 固定为 `/peerjs`，无需另起信令进程。
+- 环境变量配置：
+  - `PORT=8080`：修改监听端口（默认 8080）。
+  - `HOST=0.0.0.0`：绑定网络地址。
+  - `DEBUG=1`：开启详细 PeerJS 与 WebRTC 调试日志。
 
-## 功能
+### 方式 2：Docker 运行
 
-### ① PeerJS 直连测速
-打开**两个**页面（两个标签页 / 两台设备）：
-
-1. Host 端：填入固定 ID（如 `host1`）→ 点「随机」或直接改 ID 让 Peer 就绪。
-2. Client 端：在对端 ID 填入 `host1` → 点「连接」。
-3. 任意一端点「全部测速」：先测 5 次 ping 延迟，再测下行、上行吞吐（数据量可选 1/4/16/64 MB）。
-
-协议是对称的：两端都运行本页面，收到 ping 自动回 pong、收到下行请求自动发数据并回报，因此只需在一端发起。
-
-> PeerJS 是 WebRTC 数据通道直连，信令服务器只做握手，数据不经过服务器；结果反映两端之间的真实网络。
-
-### ② HTTP / WebSocket 连通与测速
-- **HTTP 延迟**：对目标 URL 做 5 次 GET，统计 avg/min/max。
-- **GET 测速（下行）**：流式读取响应，给出 TTFB、总耗时、下载速度（Mbps）。
-- **HTTP 上行**：POST size 字节到目标，按请求-响应往返计时，给出上传速度（Mbps）。
-- **WS 连接**：测连接耗时；**WS 延迟**：JSON ping/pong 回显；**WS 下行**：请求 `size` 字节，服务端推送，按请求→收满计时；**WS 上行**：分块上传 `size` 字节，服务端计数满回 `upDone`，按发送→应答计时；**测速（回显）**：发送大数据并等完整回显，按往返计算吞吐。
-
-内置端点（页面输入框已默认填好）：
-
-| 端点 | 用途 |
-|---|---|
-| `/api/ping` | HTTP 延迟探测 |
-| `/api/blob?size=1048576` | 下行吞吐（默认 1 MB，上限 512 MB，流式不占内存） |
-| `POST /api/upload` | 上行吞吐（上限 512 MB，POST 请求体计数并回显收到字节数） |
-| `/ws` | WebSocket 回声 + 上下行协议（`down` / `upStart` / `upDone`） |
-| `/api/info` | 服务信息 |
-| `/peerjs/` | PeerJS 信令 HTTP 信息 |
-| `/peerjs/peerjs/peers` | 在线对端列表（allow_discovery） |
-| `/vendor/peerjs.min.js` | 本地托管的 PeerJS 客户端库（离线可用） |
-
-## 技术要点
-
-- Node.js 内置 `http` + `express`；PeerJS 信令用 `peer`（peerjs-server，`ExpressPeerServer`）挂载在 `/peerjs`，客户端配置 `{ host, port, path: '/peerjs' }`。
-- PeerJS 客户端库由服务端本地托管（`node_modules/peerjs/dist/peerjs.min.js`），不依赖 CDN。
-- 测速协议为对称 JSON 控制消息（`ping/pong`、`req/got`、`send`）+ 分块二进制数据（64 KB 块，按 `bufferedAmount` 背压），两端自动应答。
-
-## 文件
-
-```
-server.js         # HTTP + PeerJS 信令 + /api + /ws
-public/index.html # 测速页面（原生 JS，无框架）
+```bash
+docker run -d --name netbench -p 8080:8080 ghcr.io/hana-ame/netbench:latest
 ```
 
-## 界面预览
+或使用本地构建：
+```bash
+docker build -t netbench .
+docker run -d -p 8080:8080 netbench
+```
 
-![netbench 页面](preview.png)
+---
+
+## 自动化测试 (Testbench)
+
+项目内置了针对全协议端点的基准测试套件：
+
+```bash
+npm test
+# 或者指定目标环境
+TARGET=http://127.0.0.1:8080 npm run testbench
+```
+
+测试套件会自动覆盖：
+1. `PeerJS` 信令 API 连通性与节点发现（`/peerjs/peerjs/peers`）
+2. `HTTP Ping` 延迟（10 轮统计 min/avg/median/max）
+3. `HTTP Downlink` GET 流式吞吐（1 MB、4 MB、16 MB）
+4. `HTTP Uplink` POST 上传吞吐（1 MB、4 MB、16 MB）
+5. `WebSocket Ping` 往返时延（RTT）
+6. `WebSocket` 下行与分块上行吞吐测试
+7. `PeerJS WebRTC DataChannel` 握手、直连 Ping、4MB 下行与上行全链路压测
+
+---
+
+## 内置 API 端点
+
+| 端点 | 协议 | 功能说明 |
+|---|---|---|
+| `/api/ping` | HTTP GET | 毫秒级延迟探测 |
+| `/api/blob?size={bytes}` | HTTP GET | 服务端流式生成二进制下行数据（支持至 512 MB） |
+| `/api/upload` | HTTP POST | 二进制流式上传接收与统计 |
+| `/api/info` | HTTP GET | 服务状态、端口与内置 Peer ID 查询 |
+| `/ws` | WebSocket | 双向 Ping-Pong、下行推流 (`down`)、上行计数 (`upStart`/`upDone`) |
+| `/peerjs/*` | HTTP / WS | PeerJS 信令协商与对端发现 |
+
+---
+
+## 项目结构
+
+```
+netbench/
+├── .github/workflows/
+│   └── ci.yml          # GitHub Actions 自动化测试与 Docker 构建发布
+├── public/
+│   ├── index.html      # 三分类现代化深色测速前端 UI
+│   └── vendor/         # 本地离线版 peerjs.min.js
+├── Dockerfile          # 生产轻量容器镜像定义
+├── server.js           # Express + PeerServer + WebSocket + 内置 Node WebRTC Peer
+├── testbench.js        # CLI 自动化全景性能测试套件
+└── package.json
+```
+
+## 协议
+
+[MIT License](LICENSE)

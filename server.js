@@ -5,8 +5,9 @@
  * 监听 8080，在一个端口上同时提供：
  *   1. HTML 测速页面（public/index.html）
  *   2. PeerJS 信令服务器（挂载于 /peerjs，供 PeerJS 客户端连接与测速）
- *   3. HTTP 测试端点：/api/ping（延迟）、/api/blob?size=N（下行吞吐）
- *   4. WebSocket 回声端点：/ws
+ *   3. 内置 PeerJS WebRTC 服务端节点（ID: server，供浏览器客户端直连本服务器测速）
+ *   4. HTTP 测试端点：/api/ping（延迟）、/api/blob?size=N（下行吞吐）、/api/upload（上行吞吐）
+ *   5. WebSocket 回声与吞吐端点：/ws
  *
  * 用法：
  *   node server.js                 # 默认 0.0.0.0:8080
@@ -17,11 +18,23 @@ const http = require('http');
 const path = require('path');
 const express = require('express');
 const { ExpressPeerServer } = require('peer');
-const { WebSocketServer } = require('ws');
+const { WebSocketServer, WebSocket } = require('ws');
 
 const PORT = parseInt(process.env.PORT || '8080', 10);
 const HOST = process.env.HOST || '0.0.0.0';
 const DEBUG = !!process.env.DEBUG;
+const SERVER_PEER_ID = process.env.SERVER_PEER_ID || 'server';
+
+// Polyfill WebRTC and WebSocket for server-side PeerJS WebRTC peer
+try {
+  const poly = require('node-datachannel/polyfill');
+  Object.assign(global, poly);
+  global.WebSocket = WebSocket;
+  global.location = { protocol: 'http:', hostname: '127.0.0.1', port: String(PORT) };
+} catch (e) {
+  console.warn('[server-peer] Failed to initialize node-datachannel polyfill:', e.message);
+}
+const { Peer } = require('peerjs');
 
 const app = express();
 const server = http.createServer(app);
@@ -58,8 +71,16 @@ const peerServer = ExpressPeerServer(server, {
   },
 });
 app.use('/peerjs', peerServer);
-peerServer.on('connection', (client) => console.log(`[peer] + ${client.getId()}`));
-peerServer.on('disconnect', (client) => console.log(`[peer] - ${client.getId()}`));
+peerServer.on('connection', (client) => {
+  if (DEBUG || client.getId() !== SERVER_PEER_ID) {
+    console.log(`[peer] + ${client.getId()}`);
+  }
+});
+peerServer.on('disconnect', (client) => {
+  if (DEBUG || client.getId() !== SERVER_PEER_ID) {
+    console.log(`[peer] - ${client.getId()}`);
+  }
+});
 peerServer.on('error', (err) => console.error('[peer] error:', err));
 
 /* ------------------------------------------------------------------ */
@@ -126,7 +147,15 @@ app.post('/api/upload', (req, res) => {
 
 // 服务信息
 app.get('/api/info', (req, res) => {
-  res.json({ ok: true, server: 'netbench', port: PORT, peerPath: '/peerjs', wsPath: '/ws', uploadPath: '/api/upload' });
+  res.json({
+    ok: true,
+    server: 'netbench',
+    port: PORT,
+    peerPath: '/peerjs',
+    serverPeerId: SERVER_PEER_ID,
+    wsPath: '/ws',
+    uploadPath: '/api/upload',
+  });
 });
 
 /* ------------------------------------------------------------------ */
@@ -197,9 +226,138 @@ server.on('upgrade', (req, socket, head) => {
 });
 
 /* ------------------------------------------------------------------ */
+/* 内置 Server Peer（浏览器 ↔ 8080 服务端 WebRTC 直连测速节点）            */
+/* ------------------------------------------------------------------ */
+function initServerPeer() {
+  if (process.env.DISABLE_SERVER_PEER) {
+    console.log('[server-peer] Server peer disabled by DISABLE_SERVER_PEER');
+    return;
+  }
+
+  let srvPeer = null;
+  const CHUNK = 16 * 1024;
+  const chunkBuf = Buffer.alloc(CHUNK, 0x5a);
+
+  function start() {
+    try {
+      srvPeer = new Peer(SERVER_PEER_ID, {
+        host: '127.0.0.1',
+        port: PORT,
+        path: '/peerjs',
+        config: {
+          iceServers: [
+            { urls: 'stun:stun.l.google.com:19302' },
+            { urls: 'stun:stun1.l.google.com:19302' },
+            { urls: 'stun:stun.cloudflare.com:3478' },
+          ],
+        },
+        debug: DEBUG ? 2 : 0,
+      });
+
+      srvPeer.on('open', (id) => {
+        console.log(`[server-peer] WebRTC server peer ready! ID: "${id}" (Browser can test speed directly with 8080 server)`);
+      });
+
+      srvPeer.on('connection', (c) => {
+        console.log(`[server-peer] + browser client connected: ${c.peer}`);
+        let upMode = null;
+
+        const sendBinary = (size, onDone) => {
+          let offset = 0;
+          let inFlight = 0;
+          const pump = () => {
+            if (!c.open) return;
+            while (offset < size) {
+              const n = Math.min(CHUNK, size - offset);
+              c.send(n === CHUNK ? chunkBuf : chunkBuf.subarray(0, n));
+              offset += n;
+              inFlight += n;
+              if (c.dataChannel && c.dataChannel.bufferedAmount > 256 * 1024) {
+                setTimeout(pump, 5);
+                return;
+              }
+              if (inFlight >= 256 * 1024) {
+                inFlight = 0;
+                setTimeout(pump, 1);
+                return;
+              }
+            }
+            if (onDone) onDone();
+          };
+          pump();
+        };
+
+        c.on('data', (data) => {
+          if (typeof data === 'string') {
+            console.log(`[server-peer] text from ${c.peer}: ${data.slice(0, 120)}`);
+            let m;
+            try { m = JSON.parse(data); } catch (e) { return; }
+            if (m && m.m === 'ping') {
+              c.send(JSON.stringify({ m: 'pong', id: m.id }));
+            } else if (m && m.m === 'req') {
+              console.log(`[server-peer] start downlink test for ${c.peer}, size=${m.size}`);
+              // 客户端请求下行数据流（服务端发送 m.size 字节）
+              sendBinary(m.size, () => {
+                console.log(`[server-peer] downlink stream complete for ${c.peer}, sending got`);
+                c.send(JSON.stringify({ m: 'got', size: m.size, id: m.id }));
+              });
+            } else if (m && m.m === 'send') {
+              console.log(`[server-peer] start uplink test for ${c.peer}, size=${m.size}`);
+              // 客户端请求上行数据流（服务端接收 m.size 字节）
+              upMode = { size: m.size, id: m.id, got: 0 };
+            }
+          } else {
+            const bytes = data.byteLength !== undefined ? data.byteLength : (data.length || 0);
+            if (upMode) {
+              upMode.got += bytes;
+              if (upMode.got >= upMode.size) {
+                console.log(`[server-peer] uplink stream complete for ${c.peer}, got=${upMode.got}`);
+                c.send(JSON.stringify({ m: 'got', size: upMode.size, id: upMode.id }));
+                upMode = null;
+              }
+            }
+          }
+        });
+
+        c.on('close', () => {
+          console.log(`[server-peer] - browser client disconnected: ${c.peer}`);
+        });
+
+        c.on('error', (err) => {
+          console.warn(`[server-peer] connection ${c.peer} warning:`, err.message || err);
+        });
+      });
+
+      srvPeer.on('disconnected', () => {
+        console.warn('[server-peer] disconnected from signaling, reconnecting in 2s...');
+        setTimeout(() => {
+          try { srvPeer.reconnect(); } catch (e) {}
+        }, 2000);
+      });
+
+      srvPeer.on('error', (err) => {
+        if (err && err.type === 'unavailable-id') {
+          console.warn(`[server-peer] ID "${SERVER_PEER_ID}" already in use. Retrying in 2s...`);
+          setTimeout(start, 2000);
+        } else {
+          console.error('[server-peer] error:', err.type || err.message || err);
+        }
+      });
+    } catch (e) {
+      console.error('[server-peer] failed to start peer:', e);
+    }
+  }
+
+  start();
+}
+
+/* ------------------------------------------------------------------ */
 server.listen(PORT, HOST, () => {
   console.log(`[netbench] listening  http://${HOST}:${PORT}/`);
   console.log(`[netbench] peerjs      ws://<host>:${PORT}/peerjs/peerjs   (client path: /peerjs)`);
+  console.log(`[netbench] server peer ID: "${SERVER_PEER_ID}" (Browser ↔ Server WebRTC DataChannel speed test)`);
   console.log(`[netbench] ws echo     ws://<host>:${PORT}/ws`);
   console.log(`[netbench] api         /api/ping  /api/blob?size=1048576  POST /api/upload  /api/info`);
+
+  initServerPeer();
 });

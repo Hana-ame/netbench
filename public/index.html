@@ -3,680 +3,1264 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>netbench · 网络测速</title>
+<title>netbench · 网络测速台</title>
 <style>
   :root {
-    --bg: #0f1115; --card: #171a21; --line: #262b36;
-    --fg: #e6e8ee; --mut: #9aa3b2; --acc: #4f8cff; --ok: #2ecc71; --warn: #f5a623; --err: #ff5c5c;
+    --bg: #0b0d12;
+    --card-bg: #131722;
+    --card-hover: #171d2b;
+    --border: #222938;
+    --text-main: #f0f3f8;
+    --text-muted: #8b95a5;
+    --primary: #3b82f6;
+    --primary-hover: #2563eb;
+    --accent: #6366f1;
+    --success: #10b981;
+    --warning: #f59e0b;
+    --danger: #ef4444;
   }
   * { box-sizing: border-box; }
-  body { margin: 0; font: 14px/1.5 -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "PingFang SC", "Microsoft YaHei", sans-serif;
-    background: var(--bg); color: var(--fg); }
-  header { padding: 18px 24px; border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
-  header h1 { font-size: 20px; margin: 0; }
-  header .sub { color: var(--mut); font-size: 12px; }
-  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--mut); display: inline-block; }
-  .dot.ok { background: var(--ok); box-shadow: 0 0 8px var(--ok); }
-  main { max-width: 1180px; margin: 0 auto; padding: 20px 16px; display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
-  @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
-  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 18px; }
-  .card h2 { margin: 0 0 4px; font-size: 16px; }
-  .card .desc { color: var(--mut); font-size: 12px; margin: 0 0 14px; }
-  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 10px; }
-  .row label { color: var(--mut); font-size: 12px; min-width: 66px; }
-  input, select, button { font: inherit; border: 1px solid var(--line); background: #0d0f13; color: var(--fg);
-    border-radius: 8px; padding: 8px 10px; }
-  input { flex: 1; min-width: 120px; }
-  input:focus, select:focus { outline: none; border-color: var(--acc); }
-  button { cursor: pointer; background: #1d2230; border-color: #2a3245; white-space: nowrap; }
-  button:hover { background: #232a3c; }
-  button.primary { background: var(--acc); border-color: var(--acc); color: #fff; }
-  button.primary:hover { filter: brightness(1.1); }
-  button:disabled { opacity: .45; cursor: not-allowed; }
-  .status { font-size: 12px; color: var(--mut); margin: 6px 0; min-height: 18px; }
-  .status .badge { padding: 2px 8px; border-radius: 999px; background: #20242e; margin-right: 6px; }
-  .status .badge.ok { background: #123a24; color: var(--ok); }
-  .status .badge.err { background: #3a1216; color: var(--err); }
-  .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 10px; margin: 12px 0; }
-  .metric { background: #101319; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
-  .metric .k { color: var(--mut); font-size: 11px; }
-  .metric .v { font-size: 18px; font-weight: 600; margin-top: 2px; font-variant-numeric: tabular-nums; }
-  .metric .v small { font-size: 11px; color: var(--mut); font-weight: 400; }
-  .log { background: #0b0d11; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px;
-    font: 12px/1.6 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; height: 210px; overflow: auto; white-space: pre-wrap; }
-  .log .ok { color: var(--ok); } .log .err { color: var(--err); } .log .warn { color: var(--warn); }
-  .log .mut { color: var(--mut); }
-  .hint { font-size: 11px; color: var(--mut); margin-top: 8px; }
-  .sec { margin-top: 14px; border-top: 1px dashed var(--line); padding-top: 12px; }
-  .sec h3 { margin: 0 0 8px; font-size: 13px; color: var(--acc); }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: var(--bg);
+    color: var(--text-main);
+    line-height: 1.5;
+  }
+
+  /* Header */
+  header {
+    background: #0f131c;
+    border-bottom: 1px solid var(--border);
+    padding: 14px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .brand { display: flex; align-items: center; gap: 12px; }
+  .brand h1 { margin: 0; font-size: 19px; font-weight: 700; letter-spacing: -0.5px; }
+  .brand .tagline { color: var(--text-muted); font-size: 13px; }
+  .server-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    padding: 4px 10px;
+    background: #182030;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    color: var(--text-muted);
+  }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--text-muted); }
+  .dot.ok { background: var(--success); box-shadow: 0 0 8px var(--success); }
+
+  /* Control Hero Bar */
+  .hero-bar {
+    max-width: 1280px;
+    margin: 16px auto 0;
+    padding: 12px 18px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 14px;
+    background: #121622;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+  }
+  .url-input-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+    min-width: 320px;
+  }
+  .url-input-row label {
+    font-size: 13px;
+    color: var(--text-muted);
+    white-space: nowrap;
+    font-weight: 500;
+  }
+  .server-url-input {
+    flex: 1;
+    background: #090b10;
+    color: var(--text-main);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 7px 12px;
+    font: 13px ui-monospace, monospace;
+    outline: none;
+    min-width: 180px;
+  }
+  .server-url-input:focus { border-color: var(--primary); }
+
+  .hero-right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .size-select {
+    background: #090b10;
+    color: var(--text-main);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 7px 10px;
+    font-size: 13px;
+    outline: none;
+    cursor: pointer;
+  }
+  .size-select:focus { border-color: var(--primary); }
+
+  /* Buttons */
+  button {
+    font: inherit;
+    cursor: pointer;
+    border-radius: 8px;
+    padding: 7px 14px;
+    font-size: 13px;
+    font-weight: 500;
+    border: 1px solid var(--border);
+    background: #1c2333;
+    color: var(--text-main);
+    transition: all 0.15s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    justify-content: center;
+  }
+  button:hover { background: #242d40; border-color: #38455f; }
+  button:active { transform: scale(0.98); }
+  button:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
+  button.primary {
+    background: linear-gradient(135deg, var(--primary), var(--accent));
+    border-color: transparent;
+    color: #fff;
+    box-shadow: 0 2px 8px rgba(59, 130, 246, 0.35);
+  }
+  button.primary:hover { filter: brightness(1.1); box-shadow: 0 4px 12px rgba(59, 130, 246, 0.45); }
+  button.btn-all-global {
+    padding: 8px 18px;
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  /* 3 Categories Layout */
+  main {
+    max-width: 1280px;
+    margin: 16px auto;
+    padding: 0 18px;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+  }
+  @media (max-width: 1024px) { main { grid-template-columns: 1fr; } }
+
+  /* Category Card */
+  .category-card {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 18px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    transition: border-color 0.2s;
+  }
+  .category-card:hover { border-color: #2e374c; }
+  .card-top { margin-bottom: 14px; }
+  .card-header-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 6px;
+  }
+  .card-title {
+    font-size: 16px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+  }
+  .card-endpoint {
+    font-size: 11px;
+    color: var(--text-muted);
+    font-family: ui-monospace, monospace;
+    background: #0c0e14;
+    padding: 2px 8px;
+    border-radius: 6px;
+    border: 1px solid #1a202c;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .status-badge {
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: #1a202d;
+    color: var(--text-muted);
+  }
+  .status-badge.ok { background: #064e3b; color: #34d399; }
+  .status-badge.warn { background: #451a03; color: #fbbf24; }
+  .status-badge.err { background: #4c0519; color: #fb7185; }
+
+  /* Metrics 3-box Grid */
+  .metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    margin: 14px 0;
+  }
+  .metric-box {
+    background: #0c0f16;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 8px;
+    text-align: center;
+  }
+  .metric-label { font-size: 11px; color: var(--text-muted); margin-bottom: 4px; }
+  .metric-val {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--text-main);
+    font-variant-numeric: tabular-nums;
+  }
+  .metric-unit { font-size: 10px; color: var(--text-muted); font-weight: 400; margin-left: 2px; }
+
+  /* Button Actions */
+  .card-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .btn-one-click {
+    width: 100%;
+    padding: 9px 0;
+    font-weight: 600;
+  }
+  .sub-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 6px;
+  }
+  .sub-actions button {
+    padding: 6px 0;
+    font-size: 12px;
+  }
+
+  /* Console Log Drawer */
+  .log-section {
+    max-width: 1280px;
+    margin: 0 auto 30px;
+    padding: 0 18px;
+  }
+  .log-card {
+    background: #080a0f;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  .log-header {
+    background: #0e121a;
+    padding: 8px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid var(--border);
+  }
+  .log-title { font-size: 12px; font-weight: 600; color: var(--text-muted); }
+  .log-box {
+    height: 180px;
+    overflow-y: auto;
+    padding: 10px 14px;
+    font: 12px/1.6 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    color: #c9d1d9;
+    white-space: pre-wrap;
+  }
+  .log-box .log-row { margin-bottom: 3px; }
+  .log-box .time { color: #6e7681; margin-right: 6px; }
+  .log-box .tag { font-weight: 600; margin-right: 6px; }
+  .log-box .tag.http { color: #60a5fa; }
+  .log-box .tag.ws { color: #f59e0b; }
+  .log-box .tag.webrtc { color: #34d399; }
+  .log-box .tag.all { color: #c084fc; }
+  .log-box .ok { color: var(--success); }
+  .log-box .err { color: var(--danger); }
+  .log-box .warn { color: var(--warning); }
+  .log-box .mut { color: var(--text-muted); }
 </style>
 </head>
 <body>
+
 <header>
-  <h1>netbench</h1>
-  <span class="sub">PeerJS 直连测速 · HTTP / WebSocket 连通测试</span>
-  <span id="srv"></span>
+  <div class="brand">
+    <h1>netbench</h1>
+    <span class="tagline">单端口网络测速台</span>
+  </div>
+  <div id="serverBadge" class="server-badge">
+    <span class="dot"></span>
+    <span id="serverInfoText">探测服务连接中…</span>
+  </div>
 </header>
 
+<!-- Global Controls Hero -->
+<div class="hero-bar">
+  <div class="url-input-row">
+    <label for="serverUrlInput">服务器 URL：</label>
+    <input id="serverUrlInput" class="server-url-input" placeholder="输入目标服务地址，如 https://... 或 http://localhost:8080">
+    <button id="btnApplyServerUrl">切换/重连</button>
+  </div>
+  <div class="hero-right">
+    <label for="globalSize">数据包：</label>
+    <select id="globalSize" class="size-select">
+      <option value="1048576">1 MB (快速)</option>
+      <option value="4194304" selected>4 MB (标准)</option>
+      <option value="16777216">16 MB (深度)</option>
+      <option value="67108864">64 MB (极限)</option>
+    </select>
+    <button id="btnRunAllGlobal" class="primary btn-all-global">
+      <span>🚀</span> 全协议一键全测
+    </button>
+  </div>
+</div>
+
 <main>
-  <!-- ============ Panel 1: PeerJS ============ -->
-  <section class="card">
-    <h2>① PeerJS 直连测速</h2>
-    <p class="desc">两端都打开本页面：一端作为 Host 固定 ID，另一端输入该 ID 连接，即可互测延迟与上下行吞吐。</p>
+  <!-- ================= 类别 1: HTTP ================= -->
+  <section class="category-card" id="cardHttp">
+    <div class="card-top">
+      <div class="card-header-row">
+        <h2 class="card-title">🌐 HTTP 测速</h2>
+        <span class="status-badge ok" id="badgeHttp">REST API</span>
+      </div>
+      <div class="card-endpoint" id="endpointHttp">GET /api/blob · POST /api/upload</div>
 
-    <div class="row">
-      <label>我的 ID</label>
-      <input id="peerId" placeholder="留空自动生成">
-      <button id="btnNewId" title="随机新 ID">随机</button>
-    </div>
-    <div class="row">
-      <label>信令服务器</label>
-      <input id="peerHost" placeholder="host" style="max-width:150px">
-      <input id="peerPort" placeholder="port" style="max-width:70px">
-      <select id="peerProto">
-        <option value="http">http</option>
-        <option value="https">https</option>
-      </select>
-    </div>
-    <div class="row">
-      <label>对端 ID</label>
-      <input id="remoteId" placeholder="要连接的对端 ID">
-      <button id="btnConnect" class="primary">连接</button>
-      <button id="btnDisconnect">断开</button>
-    </div>
-
-    <div class="status" id="peerStatus"><span class="badge">未初始化</span></div>
-
-    <div class="row" style="margin-top:8px">
-      <label>数据量</label>
-      <select id="peerSize">
-        <option value="1048576">1 MB</option>
-        <option value="4194304" selected>4 MB</option>
-        <option value="16777216">16 MB</option>
-        <option value="67108864">64 MB</option>
-      </select>
-      <button id="btnPeerPing">延迟</button>
-      <button id="btnPeerDown">下行</button>
-      <button id="btnPeerUp">上行</button>
-      <button id="btnPeerAll">全部测速</button>
+      <div class="metrics-grid">
+        <div class="metric-box">
+          <div class="metric-label">延迟 (RTT)</div>
+          <div class="metric-val" id="valHttpPing">—</div>
+        </div>
+        <div class="metric-box">
+          <div class="metric-label">下行速率</div>
+          <div class="metric-val" id="valHttpDown">—</div>
+        </div>
+        <div class="metric-box">
+          <div class="metric-label">上行速率</div>
+          <div class="metric-val" id="valHttpUp">—</div>
+        </div>
+      </div>
     </div>
 
-    <div class="metrics" id="peerMetrics">
-      <div class="metric"><div class="k">延迟 RTT</div><div class="v" id="m_ping">—</div></div>
-      <div class="metric"><div class="k">下行</div><div class="v" id="m_down">—</div></div>
-      <div class="metric"><div class="k">上行</div><div class="v" id="m_up">—</div></div>
-      <div class="metric"><div class="k">连接状态</div><div class="v" id="m_conn" style="font-size:14px">未连接</div></div>
+    <div class="card-actions">
+      <button id="btnHttpAll" class="primary btn-one-click">⚡ 一键测速 (延迟 + 上下行)</button>
+      <div class="sub-actions">
+        <button id="btnHttpPing">测延迟</button>
+        <button id="btnHttpDown">测下行</button>
+        <button id="btnHttpUp">测上行</button>
+      </div>
     </div>
-    <div class="log" id="peerLog"></div>
-    <div class="hint">提示：若对端是另一个浏览器标签页/设备，两端都打开本页面；连接后任意一端点“全部测速”即可。信令服务器默认就是本页面的地址。</div>
   </section>
 
-  <!-- ============ Panel 2: HTTP / WS ============ -->
-  <section class="card">
-    <h2>② HTTP / WebSocket 连通与测速</h2>
-    <p class="desc">对本服务内置端点或任意外部 URL 做连通、延迟与吞吐测试。</p>
+  <!-- ================= 类别 2: WebSocket ================= -->
+  <section class="category-card" id="cardWs">
+    <div class="card-top">
+      <div class="card-header-row">
+        <h2 class="card-title">⚡ WebSocket 测速</h2>
+        <span class="status-badge" id="badgeWs">未连接</span>
+      </div>
+      <div class="card-endpoint" id="endpointWs">ws://…/ws</div>
 
-    <div class="sec">
-      <h3>HTTP</h3>
-      <div class="row">
-        <label>GET URL</label>
-        <input id="httpUrl" value="">
-      </div>
-      <div class="row">
-        <label>Ping URL</label>
-        <input id="pingUrl" value="">
-      </div>
-      <div class="row">
-        <button id="btnHttpPing" class="primary">HTTP 延迟</button>
-        <button id="btnHttpGet" class="primary">GET 测速</button>
-        <button id="btnHttpStop">停止</button>
-      </div>
-      <div class="row">
-        <label>上传 URL</label>
-        <input id="httpUploadUrl" value="">
-      </div>
-      <div class="row">
-        <label>数据量</label>
-        <select id="httpSize">
-          <option value="1048576">1 MB</option>
-          <option value="4194304" selected>4 MB</option>
-          <option value="16777216">16 MB</option>
-          <option value="67108864">64 MB</option>
-        </select>
-        <button id="btnHttpUp" class="primary">HTTP 上行</button>
-      </div>
-      <div class="metrics" id="httpMetrics">
-        <div class="metric"><div class="k">HTTP 延迟</div><div class="v" id="m_http_ping">—</div></div>
-        <div class="metric"><div class="k">TTFB</div><div class="v" id="m_http_ttfb">—</div></div>
-        <div class="metric"><div class="k">下载</div><div class="v" id="m_http_down">—</div></div>
-        <div class="metric"><div class="k">上传</div><div class="v" id="m_http_up">—</div></div>
-        <div class="metric"><div class="k">状态</div><div class="v" id="m_http_status">—</div></div>
+      <div class="metrics-grid">
+        <div class="metric-box">
+          <div class="metric-label">延迟 (RTT)</div>
+          <div class="metric-val" id="valWsPing">—</div>
+        </div>
+        <div class="metric-box">
+          <div class="metric-label">下行速率</div>
+          <div class="metric-val" id="valWsDown">—</div>
+        </div>
+        <div class="metric-box">
+          <div class="metric-label">上行速率</div>
+          <div class="metric-val" id="valWsUp">—</div>
+        </div>
       </div>
     </div>
 
-    <div class="sec">
-      <h3>WebSocket</h3>
-      <div class="row">
-        <label>WS URL</label>
-        <input id="wsUrl" value="">
-      </div>
-      <div class="row">
-        <label>数据量</label>
-        <select id="wsSize">
-          <option value="1048576">1 MB</option>
-          <option value="4194304" selected>4 MB</option>
-          <option value="16777216">16 MB</option>
-        </select>
-        <button id="btnWsConnect" class="primary">连接</button>
-        <button id="btnWsDisconnect">断开</button>
-        <button id="btnWsPing">WS 延迟</button>
-        <button id="btnWsDown">WS 下行</button>
-        <button id="btnWsUp">WS 上行</button>
-        <button id="btnWsSpeed">测速(回显)</button>
-      </div>
-      <div class="metrics" id="wsMetrics">
-        <div class="metric"><div class="k">连接耗时</div><div class="v" id="m_ws_conn">—</div></div>
-        <div class="metric"><div class="k">WS 延迟</div><div class="v" id="m_ws_ping">—</div></div>
-        <div class="metric"><div class="k">下载</div><div class="v" id="m_ws_down">—</div></div>
-        <div class="metric"><div class="k">上传</div><div class="v" id="m_ws_up">—</div></div>
-        <div class="metric"><div class="k">吞吐(往返)</div><div class="v" id="m_ws_speed">—</div></div>
-        <div class="metric"><div class="k">状态</div><div class="v" id="m_ws_status">未连接</div></div>
+    <div class="card-actions">
+      <button id="btnWsAll" class="primary btn-one-click">⚡ 一键测速 (延迟 + 上下行)</button>
+      <div class="sub-actions">
+        <button id="btnWsPing">测延迟</button>
+        <button id="btnWsDown">测下行</button>
+        <button id="btnWsUp">测上行</button>
       </div>
     </div>
-    <div class="log" id="httpLog"></div>
-    <div class="hint">提示：本服务内置 <code>/api/blob?size=…</code>（下行）、<code>POST /api/upload</code>（上行）、<code>/api/ping</code>（延迟）、<code>/ws</code>（上下行 + 回显）端点；输入框默认已填好本服务地址。</div>
+  </section>
+
+  <!-- ================= 类别 3: PeerJS (WebRTC) ================= -->
+  <section class="category-card" id="cardPeer">
+    <div class="card-top">
+      <div class="card-header-row">
+        <h2 class="card-title">🔗 WebRTC 测速</h2>
+        <span class="status-badge" id="badgePeer">初始化…</span>
+      </div>
+      <div class="card-endpoint" id="endpointPeer">DataChannel ↔ server</div>
+
+      <div class="metrics-grid">
+        <div class="metric-box">
+          <div class="metric-label">延迟 (RTT)</div>
+          <div class="metric-val" id="valPeerPing">—</div>
+        </div>
+        <div class="metric-box">
+          <div class="metric-label">下行速率</div>
+          <div class="metric-val" id="valPeerDown">—</div>
+        </div>
+        <div class="metric-box">
+          <div class="metric-label">上行速率</div>
+          <div class="metric-val" id="valPeerUp">—</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card-actions">
+      <button id="btnPeerAll" class="primary btn-one-click">⚡ 一键测速 (延迟 + 上下行)</button>
+      <div class="sub-actions">
+        <button id="btnPeerPing">测延迟</button>
+        <button id="btnPeerDown">测下行</button>
+        <button id="btnPeerUp">测上行</button>
+      </div>
+    </div>
   </section>
 </main>
+
+<!-- Realtime Log Terminal -->
+<div class="log-section">
+  <div class="log-card">
+    <div class="log-header">
+      <span class="log-title">实时测试日志 (Console Output)</span>
+      <button id="btnClearLog" style="padding: 2px 8px; font-size: 11px;">清空日志</button>
+    </div>
+    <div id="logBox" class="log-box"></div>
+  </div>
+</div>
 
 <script src="/vendor/peerjs.min.js"></script>
 <script>
 /* ==================================================================== */
-/*  工具                                                                 */
+/*  工具与全局状态                                                       */
 /* ==================================================================== */
 const $ = (id) => document.getElementById(id);
-const fmtMs = (ms) => ms >= 1000 ? (ms / 1000).toFixed(2) + ' s' : (ms >= 100 ? ms.toFixed(0) : ms.toFixed(1)) + ' ms';
-const fmtMbps = (bytes, ms) => (bytes * 8 / (ms / 1000) / 1e6).toFixed(2);
 const now = () => performance.now();
-const sleep = (ms) => new Promise(r => setTimeout(r, ms));
-const stats = (arr) => {
-  const s = [...arr].sort((a, b) => a - b);
-  return {
-    min: s[0], max: s[s.length - 1], avg: s.reduce((a, b) => a + b, 0) / s.length,
-    med: s.length % 2 ? s[(s.length - 1) / 2] : (s[s.length / 2 - 1] + s[s.length / 2]) / 2
-  };
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+const fmtMs = (ms) => ms >= 1000 ? (ms / 1000).toFixed(2) + ' s' : ms.toFixed(1) + ' ms';
+const fmtMbps = (bytes, ms) => (bytes * 8 / (ms / 1000) / 1e6).toFixed(1);
+
+function getPayloadSize() {
+  return parseInt($('globalSize').value, 10) || 4194304;
+}
+
+function log(tag, msg, cls = '') {
+  const t = new Date().toTimeString().slice(0, 8);
+  const box = $('logBox');
+  const div = document.createElement('div');
+  div.className = 'log-row';
+
+  let tagClass = 'all';
+  if (tag === 'HTTP') tagClass = 'http';
+  else if (tag === 'WS') tagClass = 'ws';
+  else if (tag === 'WebRTC') tagClass = 'webrtc';
+
+  div.innerHTML = `<span class="time">[${t}]</span><span class="tag ${tagClass}">[${tag}]</span><span class="${cls}">${msg}</span>`;
+  box.appendChild(div);
+  box.scrollTop = box.scrollHeight;
+}
+
+$('btnClearLog').onclick = () => { $('logBox').innerHTML = ''; };
+
+/* ==================================================================== */
+/*  服务器 URL 统一解析与派生配置                                         */
+/* ==================================================================== */
+let currentBaseUrl = location.origin;
+let endpoints = {
+  httpPing: `${location.origin}/api/ping`,
+  httpBlob: `${location.origin}/api/blob`,
+  httpUpload: `${location.origin}/api/upload`,
+  wsUrl: `${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}/ws`,
+  peerHost: location.hostname,
+  peerPort: location.port ? parseInt(location.port, 10) : (location.protocol === 'https:' ? 443 : 80),
+  peerSecure: location.protocol === 'https:',
+  targetPeerId: 'server'
 };
 
-function log(el, msg, cls = '') {
-  const t = new Date().toTimeString().slice(0, 8);
-  const div = document.createElement('div');
-  if (cls) div.className = cls;
-  div.textContent = `[${t}] ${msg}`;
-  el.appendChild(div);
-  el.scrollTop = el.scrollHeight;
+function parseAndApplyServerUrl(inputUrl) {
+  let u;
+  try {
+    inputUrl = inputUrl.trim();
+    if (!/^https?:\/\//i.test(inputUrl)) {
+      inputUrl = (location.protocol || 'http:') + '//' + inputUrl;
+    }
+    u = new URL(inputUrl);
+  } catch (e) {
+    log('ALL', '输入的 URL 格式不正确: ' + e.message, 'err');
+    return false;
+  }
+
+  currentBaseUrl = u.origin;
+  $('serverUrlInput').value = currentBaseUrl;
+
+  const isHttps = u.protocol === 'https:';
+  const defaultPort = isHttps ? 443 : 80;
+  const port = u.port ? parseInt(u.port, 10) : defaultPort;
+
+  endpoints.httpPing = `${currentBaseUrl}/api/ping`;
+  endpoints.httpBlob = `${currentBaseUrl}/api/blob`;
+  endpoints.httpUpload = `${currentBaseUrl}/api/upload`;
+  endpoints.wsUrl = `${isHttps ? 'wss:' : 'ws:'}//${u.host}/ws`;
+  endpoints.peerHost = u.hostname;
+  endpoints.peerPort = port;
+  endpoints.peerSecure = isHttps;
+
+  $('endpointHttp').textContent = `${currentBaseUrl}/api/…`;
+  $('endpointWs').textContent = endpoints.wsUrl;
+  $('endpointPeer').textContent = `DataChannel ↔ ${endpoints.targetPeerId}`;
+
+  log('ALL', `目标服务器已设置为: ${currentBaseUrl}`, 'ok');
+
+  // 断开已有连接并重新初始化
+  if (wsInstance) {
+    try { wsInstance.close(); } catch (_) {}
+    wsInstance = null;
+  }
+  if (peerConn) {
+    try { peerConn.close(); } catch (_) {}
+    peerConn = null;
+  }
+  peerConnectingPromise = null;
+  initPeer();
+
+  return true;
+}
+
+$('btnApplyServerUrl').onclick = () => {
+  parseAndApplyServerUrl($('serverUrlInput').value);
+};
+$('serverUrlInput').onkeydown = (e) => {
+  if (e.key === 'Enter') parseAndApplyServerUrl($('serverUrlInput').value);
+};
+
+/* ==================================================================== */
+/*  测速任务并发控制 (互斥锁)                                             */
+/* ==================================================================== */
+let isTesting = false;
+
+function setBusy(busy) {
+  isTesting = busy;
+  const btns = document.querySelectorAll('.card-actions button, .header-actions button, #btnApplyServerUrl');
+  btns.forEach(b => {
+    b.disabled = busy;
+  });
+}
+
+async function withBusy(fn) {
+  if (isTesting) {
+    log('ALL', '⚠️ 当前已有测速任务正在运行中，请等待其执行完成…', 'warn');
+    return;
+  }
+  setBusy(true);
+  try {
+    await fn();
+  } catch (_) {
+    // 错误已在各个测速函数中单独捕获和记录
+  } finally {
+    setBusy(false);
+  }
 }
 
 /* ==================================================================== */
-/*  PeerJS 测速                                                          */
+/*  1. HTTP 测速模块                                                     */
 /* ==================================================================== */
-const peerLog = $('peerLog');
-const peerStatusEl = $('peerStatus');
-let peer = null;            // 本端 Peer 实例
-let conn = null;            // 当前数据连接
-let connState = null;       // 连接上的测试协议状态
-let peerReady = false;
+async function runHttpPing() {
+  const url = endpoints.httpPing;
+  log('HTTP', '开始探测 HTTP 延迟 (5 次 GET)…', 'mut');
+  $('valHttpPing').innerHTML = `<span class="mut">测中…</span>`;
 
-function setPeerStatus(txt, cls) {
-  peerStatusEl.innerHTML = `<span class="badge ${cls || ''}">${txt}</span>`;
-  const m = $('m_conn'); if (m) m.textContent = txt;
+  try {
+    const times = [];
+    for (let i = 0; i < 5; i++) {
+      const s = now();
+      const res = await fetch(url, { cache: 'no-store' });
+      await res.text();
+      times.push(now() - s);
+    }
+    times.sort((a, b) => a - b);
+    const avg = times.reduce((a, b) => a + b, 0) / times.length;
+    $('valHttpPing').innerHTML = `${avg.toFixed(1)}<span class="metric-unit">ms</span>`;
+    log('HTTP', `延迟探测完成: avg ${avg.toFixed(1)} ms (min ${times[0].toFixed(1)} / max ${times[times.length - 1].toFixed(1)})`, 'ok');
+    return avg;
+  } catch (e) {
+    $('valHttpPing').innerHTML = `<span class="err">失败</span>`;
+    log('HTTP', '延迟探测失败: ' + e.message, 'err');
+    throw e;
+  }
 }
 
-// 默认信令服务器 = 当前页面来源
-function defaultPeerCfg() {
-  const proto = location.protocol === 'https:' ? 'https' : 'http';
-  return { host: location.hostname, port: location.port || (proto === 'https' ? '443' : '80'), proto };
-}
-function fillPeerCfg() {
-  const c = defaultPeerCfg();
-  if (!$('peerHost').value) $('peerHost').value = c.host;
-  if (!$('peerPort').value) $('peerPort').value = c.port;
-  $('peerProto').value = c.proto;
-}
+async function runHttpDownload() {
+  const size = getPayloadSize();
+  const url = `${endpoints.httpBlob}?size=${size}`;
+  log('HTTP', `开始下行测速 (${(size / 1048576).toFixed(0)} MB)…`, 'mut');
+  $('valHttpDown').innerHTML = `0<span class="metric-unit">%</span>`;
 
-function createPeer() {
-  if (peer) { peer.destroy(); peer = null; conn = null; connState = null; }
-  const id = $('peerId').value.trim() || undefined;
-  const host = $('peerHost').value.trim() || location.hostname;
-  const port = $('peerPort').value.trim() || location.port;
-  const secure = $('peerProto').value === 'https';
-  const opts = { host, path: '/peerjs', secure, debug: 0 };
-  if (port && port !== '80' && port !== '443') opts.port = parseInt(port, 10);
-  peer = new Peer(id, opts);
-  setPeerStatus('初始化…', 'warn');
-  peer.on('open', (pid) => {
-    peerReady = true;
-    $('peerId').value = pid;
-    setPeerStatus(`就绪 · 我的 ID: ${pid}`, 'ok');
-    log(peerLog, `Peer 已连接，我的 ID = ${pid}`, 'ok');
-    refreshPeers();
-  });
-  peer.on('connection', (c) => { bindConn(c); });
-  peer.on('error', (err) => {
-    peerReady = false;
-    setPeerStatus(`错误: ${err.type || err.message}`, 'err');
-    log(peerLog, `Peer 错误: ${err.type} ${err.message || ''}`, 'err');
-  });
-  peer.on('disconnected', () => {
-    setPeerStatus('与信令服务器断开', 'err');
-    log(peerLog, 'Peer 与信令服务器断开', 'err');
-  });
+  try {
+    const s = now();
+    const res = await fetch(url, { cache: 'no-store' });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const reader = res.body.getReader();
+    let total = 0;
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      const pct = Math.min(99, Math.floor((total / size) * 100));
+      $('valHttpDown').innerHTML = `${pct}<span class="metric-unit">%</span>`;
+    }
+    const dt = now() - s;
+    const mbps = fmtMbps(total, dt);
+    $('valHttpDown').innerHTML = `${mbps}<span class="metric-unit">Mbps</span>`;
+    log('HTTP', `下行完成: ${(total / 1048576).toFixed(1)} MB 用时 ${fmtMs(dt)} → ${mbps} Mbps`, 'ok');
+    return mbps;
+  } catch (e) {
+    $('valHttpDown').innerHTML = `<span class="err">失败</span>`;
+    log('HTTP', '下行失败: ' + e.message, 'err');
+    throw e;
+  }
 }
 
-function refreshPeers() {
-  if (!peer || !peer.ready) return;
-  // discovery: GET /peerjs/peerjs/peers  (需要服务端 allow_discovery)
-  fetch(`${location.origin}/peerjs/peerjs/peers`).then(r => r.json()).then(ids => {
-    if (Array.isArray(ids) && ids.length) log(peerLog, `在线对端: ${ids.join(', ')}`, 'mut');
-  }).catch(() => {});
+async function runHttpUpload() {
+  const size = getPayloadSize();
+  const url = endpoints.httpUpload;
+  log('HTTP', `开始上行测速 (${(size / 1048576).toFixed(0)} MB)…`, 'mut');
+  $('valHttpUp').innerHTML = `<span class="mut">测中…</span>`;
+
+  try {
+    const payload = new Uint8Array(size);
+    payload.fill(0x5a);
+    const s = now();
+    const res = await fetch(url, {
+      method: 'POST',
+      body: payload,
+      headers: { 'Content-Type': 'application/octet-stream' }
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    await res.json();
+    const dt = now() - s;
+    const mbps = fmtMbps(size, dt);
+    $('valHttpUp').innerHTML = `${mbps}<span class="metric-unit">Mbps</span>`;
+    log('HTTP', `上行完成: ${(size / 1048576).toFixed(1)} MB 用时 ${fmtMs(dt)} → ${mbps} Mbps`, 'ok');
+    return mbps;
+  } catch (e) {
+    $('valHttpUp').innerHTML = `<span class="err">失败</span>`;
+    log('HTTP', '上行失败: ' + e.message, 'err');
+    throw e;
+  }
 }
 
-/* ---- 连接协议：对称（两端同一页面自动应答） ---- */
-const CHUNK = 64 * 1024;
-const CHUNK_BUF = new ArrayBuffer(CHUNK);
+async function runHttpAll() {
+  await runHttpPing();
+  await sleep(100);
+  await runHttpDownload();
+  await sleep(100);
+  await runHttpUpload();
+}
 
-// 通过 DataChannel 发送 size 字节（分块 + 背压），完成后回调
-function sendBinary(c, size, onDone) {
-  let offset = 0;
-  const pump = () => {
-    while (offset < size) {
-      const n = Math.min(CHUNK, size - offset);
-      c.send(CHUNK_BUF.slice(0, n));
-      offset += n;
-      if (c.dataChannel && c.dataChannel.bufferedAmount > 8 * 1024 * 1024) {
-        setTimeout(pump, 8);
+$('btnHttpPing').onclick = () => withBusy(runHttpPing);
+$('btnHttpDown').onclick = () => withBusy(runHttpDownload);
+$('btnHttpUp').onclick = () => withBusy(runHttpUpload);
+$('btnHttpAll').onclick = () => withBusy(runHttpAll);
+
+/* ==================================================================== */
+/*  2. WebSocket 测速模块                                                */
+/* ==================================================================== */
+let wsInstance = null;
+let wsState = { down: null, up: null };
+
+function ensureWsConn() {
+  return new Promise((resolve, reject) => {
+    if (wsInstance && wsInstance.readyState === WebSocket.OPEN) {
+      return resolve(wsInstance);
+    }
+    const url = endpoints.wsUrl;
+    log('WS', `正在连接 WebSocket [${url}]…`, 'mut');
+    const w = new WebSocket(url);
+    w.binaryType = 'arraybuffer';
+
+    const timer = setTimeout(() => {
+      w.close();
+      $('badgeWs').textContent = '连接超时';
+      $('badgeWs').className = 'status-badge err';
+      reject(new Error('WebSocket 连接超时'));
+    }, 8000);
+
+    w.onopen = () => {
+      clearTimeout(timer);
+      wsInstance = w;
+      $('badgeWs').textContent = '已连接';
+      $('badgeWs').className = 'status-badge ok';
+      log('WS', 'WebSocket 连接成功', 'ok');
+      resolve(w);
+    };
+
+    w.onmessage = (ev) => {
+      const d = ev.data;
+      if (typeof d === 'string' || (d instanceof ArrayBuffer && d.byteLength < 4096)) {
+        try {
+          const m = JSON.parse(typeof d === 'string' ? d : new TextDecoder().decode(d));
+          if (m && m.m === 'upDone' && wsState.up && m.id === wsState.up.id) {
+            const st = wsState.up;
+            wsState.up = null;
+            if (st.resolve) st.resolve(m.size || st.size);
+          }
+        } catch (_) {}
         return;
       }
-    }
-    if (onDone) onDone();
-  };
-  pump();
+      if (wsState.down) {
+        const bytes = d.byteLength !== undefined ? d.byteLength : (d.size || 0);
+        wsState.down.got += bytes;
+        const pct = Math.min(99, Math.floor((wsState.down.got / wsState.down.size) * 100));
+        $('valWsDown').innerHTML = `${pct}<span class="metric-unit">%</span>`;
+        if (wsState.down.got >= wsState.down.size) {
+          const st = wsState.down;
+          wsState.down = null;
+          if (st.resolve) st.resolve(st.got);
+        }
+      }
+    };
+
+    w.onerror = () => {
+      clearTimeout(timer);
+      $('badgeWs').textContent = '连接异常';
+      $('badgeWs').className = 'status-badge err';
+    };
+
+    w.onclose = () => {
+      wsInstance = null;
+      $('badgeWs').textContent = '未连接';
+      $('badgeWs').className = 'status-badge';
+    };
+  });
 }
 
-function bindConn(c) {
-  conn = c;
-  connState = {
-    expectedDownload: 0, downloadReceived: 0, downloadStart: 0, downloadId: 0, downloadResolve: null,
-    uploadStart: 0, uploadResolve: null, uploadSize: 0,
-    pingMap: new Map()
-  };
+async function runWsPing() {
+  const w = await ensureWsConn();
+  log('WS', '开始测试 WebSocket Ping 延迟 (5 次)…', 'mut');
+  $('valWsPing').innerHTML = `<span class="mut">测中…</span>`;
+
+  try {
+    const times = [];
+    for (let i = 0; i < 5; i++) {
+      const s = now();
+      const id = 'p_' + Math.random().toString(36).slice(2);
+      await new Promise((res, rej) => {
+        const timeout = setTimeout(() => rej(new Error('WS ping 超时')), 5000);
+        const onMsg = (ev) => {
+          try {
+            const m = JSON.parse(ev.data);
+            if (m.m === 'ping' && m.id === id) {
+              clearTimeout(timeout);
+              w.removeEventListener('message', onMsg);
+              res();
+            }
+          } catch (_) {}
+        };
+        w.addEventListener('message', onMsg);
+        w.send(JSON.stringify({ m: 'ping', id, t: Date.now() }));
+      });
+      times.push(now() - s);
+      await sleep(30);
+    }
+    times.sort((a, b) => a - b);
+    const avg = times.reduce((a, b) => a + b, 0) / times.length;
+    $('valWsPing').innerHTML = `${avg.toFixed(1)}<span class="metric-unit">ms</span>`;
+    log('WS', `延迟完成: avg ${avg.toFixed(1)} ms (min ${times[0].toFixed(1)} / max ${times[times.length - 1].toFixed(1)})`, 'ok');
+    return avg;
+  } catch (e) {
+    $('valWsPing').innerHTML = `<span class="err">失败</span>`;
+    log('WS', 'Ping 失败: ' + e.message, 'err');
+    throw e;
+  }
+}
+
+async function runWsDownload() {
+  const w = await ensureWsConn();
+  const size = getPayloadSize();
+  log('WS', `开始 WebSocket 下行测速 (${(size / 1048576).toFixed(0)} MB)…`, 'mut');
+  $('valWsDown').innerHTML = `0<span class="metric-unit">%</span>`;
+
+  try {
+    const id = 'd_' + Date.now();
+    const s = now();
+    const timeoutMs = Math.max(35000, Math.ceil((size / 1048576) * 10000));
+    await new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        wsState.down = null;
+        reject(new Error('WS 下行超时'));
+      }, timeoutMs);
+      wsState.down = {
+        id,
+        size,
+        got: 0,
+        resolve: () => {
+          clearTimeout(timer);
+          resolve();
+        }
+      };
+      w.send(JSON.stringify({ m: 'down', size, id }));
+    });
+
+    const dt = now() - s;
+    const mbps = fmtMbps(size, dt);
+    $('valWsDown').innerHTML = `${mbps}<span class="metric-unit">Mbps</span>`;
+    log('WS', `下行完成: ${(size / 1048576).toFixed(1)} MB 用时 ${fmtMs(dt)} → ${mbps} Mbps`, 'ok');
+    return mbps;
+  } catch (e) {
+    $('valWsDown').innerHTML = `<span class="err">失败</span>`;
+    log('WS', '下行失败: ' + e.message, 'err');
+    throw e;
+  }
+}
+
+async function runWsUpload() {
+  const w = await ensureWsConn();
+  const size = getPayloadSize();
+  log('WS', `开始 WebSocket 上行测速 (${(size / 1048576).toFixed(0)} MB)…`, 'mut');
+  $('valWsUp').innerHTML = `0<span class="metric-unit">%</span>`;
+
+  try {
+    const id = 'u_' + Date.now();
+    const s = now();
+    const timeoutMs = Math.max(35000, Math.ceil((size / 1048576) * 10000));
+    await new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        wsState.up = null;
+        reject(new Error('WS 上行超时'));
+      }, timeoutMs);
+
+      wsState.up = {
+        id,
+        size,
+        resolve: () => {
+          clearTimeout(timer);
+          resolve();
+        }
+      };
+
+      w.send(JSON.stringify({ m: 'upStart', size, id }));
+
+      const CHUNK = 32 * 1024;
+      const chunk = new ArrayBuffer(CHUNK);
+      new Uint8Array(chunk).fill(0x5a);
+      let sent = 0;
+      const pump = () => {
+        while (sent < size) {
+          if (w.bufferedAmount > 256 * 1024) {
+            setTimeout(pump, 8);
+            return;
+          }
+          const n = Math.min(CHUNK, size - sent);
+          sent += n;
+          w.send(n === CHUNK ? chunk : chunk.slice(0, n));
+          const pct = Math.min(99, Math.floor((sent / size) * 100));
+          $('valWsUp').innerHTML = `${pct}<span class="metric-unit">%</span>`;
+        }
+      };
+      setTimeout(pump, 20);
+    });
+
+    const dt = now() - s;
+    const mbps = fmtMbps(size, dt);
+    $('valWsUp').innerHTML = `${mbps}<span class="metric-unit">Mbps</span>`;
+    log('WS', `上行完成: ${(size / 1048576).toFixed(1)} MB 用时 ${fmtMs(dt)} → ${mbps} Mbps`, 'ok');
+    return mbps;
+  } catch (e) {
+    $('valWsUp').innerHTML = `<span class="err">失败</span>`;
+    log('WS', '上行失败: ' + e.message, 'err');
+    throw e;
+  }
+}
+
+async function runWsAll() {
+  await runWsPing();
+  await sleep(100);
+  await runWsDownload();
+  await sleep(100);
+  await runWsUpload();
+}
+
+$('btnWsPing').onclick = () => withBusy(runWsPing);
+$('btnWsDown').onclick = () => withBusy(runWsDownload);
+$('btnWsUp').onclick = () => withBusy(runWsUpload);
+$('btnWsAll').onclick = () => withBusy(runWsAll);
+
+/* ==================================================================== */
+/*  3. WebRTC / PeerJS 测速模块 (直连 8080 服务端 server)                  */
+/* ==================================================================== */
+let peer = null;
+let peerConn = null;
+let peerReady = false;
+let peerConnectingPromise = null;
+let peerConnState = { expectedDownload: 0, downloadReceived: 0, downloadResolve: null, uploadResolve: null, pingMap: new Map() };
+
+function initPeer() {
+  if (peer) {
+    try { peer.destroy(); } catch (_) {}
+    peer = null;
+  }
+  peerConn = null;
+  peerReady = false;
+  peerConnectingPromise = null;
+
+  peer = new Peer({
+    host: endpoints.peerHost,
+    port: endpoints.peerPort,
+    path: '/peerjs',
+    secure: endpoints.peerSecure,
+    debug: 0,
+    config: {
+      iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun1.l.google.com:19302' },
+        { urls: 'stun:stun.cloudflare.com:3478' }
+      ]
+    }
+  });
+
+  $('badgePeer').textContent = '信令连接中…';
+  $('badgePeer').className = 'status-badge warn';
+
+  peer.on('open', (pid) => {
+    peerReady = true;
+    $('badgePeer').textContent = '就绪 (ID: ' + pid.slice(0, 6) + '…)';
+    $('badgePeer').className = 'status-badge ok';
+    log('WebRTC', `Peer 客户端就绪 (My ID: ${pid})`, 'ok');
+    // 自动连接到服务端内置 Peer (server)
+    ensurePeerConn().catch(() => {});
+  });
+
+  peer.on('connection', (c) => bindPeerConn(c));
+  peer.on('error', (err) => {
+    $('badgePeer').textContent = 'Peer 异常';
+    $('badgePeer').className = 'status-badge err';
+    log('WebRTC', `Peer 信令错误: ${err.type || err.message}`, 'err');
+  });
+}
+
+function bindPeerConn(c) {
+  peerConn = c;
   c.on('open', () => {
-    setPeerStatus(`已连接 · 对端 ${c.peer}`, 'ok');
-    log(peerLog, `数据通道已打开 → ${c.peer}`, 'ok');
-    // 确保收到的是 ArrayBuffer 以便统计字节
-    try { if (c.dataChannel) c.dataChannel.binaryType = 'arraybuffer'; } catch (e) {}
+    $('badgePeer').textContent = `已直连 (${c.peer})`;
+    $('badgePeer').className = 'status-badge ok';
+    log('WebRTC', `WebRTC 数据通道已建立 ↔ ${c.peer}`, 'ok');
+    try { if (c.dataChannel) c.dataChannel.binaryType = 'arraybuffer'; } catch (_) {}
   });
-  c.on('data', (data) => handleData(c, data));
+
+  c.on('data', (data) => {
+    const st = peerConnState;
+    if (typeof data === 'string') {
+      let m; try { m = JSON.parse(data); } catch (_) { return; }
+      if (m.m === 'ping') {
+        c.send(JSON.stringify({ m: 'pong', id: m.id }));
+      } else if (m.m === 'pong') {
+        const p = st.pingMap.get(m.id);
+        if (p) { st.pingMap.delete(m.id); p.resolve(now() - p.start); }
+      } else if (m.m === 'got') {
+        if (st.downloadResolve && (!m.id || m.id === st.downloadId)) {
+          const r = st.downloadResolve;
+          st.downloadResolve = null;
+          st.expectedDownload = 0;
+          r.resolve();
+        }
+        if (st.uploadResolve && (!m.id || m.id === st.uploadId)) {
+          const r = st.uploadResolve;
+          st.uploadResolve = null;
+          r.resolve();
+        }
+      }
+    } else {
+      const bytes = data.byteLength !== undefined ? data.byteLength : (data.size || 0);
+      if (st.expectedDownload > 0) {
+        st.downloadReceived += bytes;
+        const pct = Math.min(99, Math.floor((st.downloadReceived / st.expectedDownload) * 100));
+        $('valPeerDown').innerHTML = `${pct}<span class="metric-unit">%</span>`;
+        if (st.downloadReceived >= st.expectedDownload) {
+          c.send(JSON.stringify({ m: 'got', size: st.downloadReceived, id: st.downloadId }));
+          const r = st.downloadResolve;
+          st.downloadResolve = null;
+          st.expectedDownload = 0;
+          if (r) r.resolve();
+        }
+      }
+    }
+  });
+
   c.on('close', () => {
-    setPeerStatus('连接已关闭', '');
-    log(peerLog, `与 ${c.peer} 的连接已关闭`, 'warn');
+    peerConn = null;
+    $('badgePeer').textContent = '未连接';
+    $('badgePeer').className = 'status-badge';
   });
-  c.on('error', (e) => { log(peerLog, '数据连接错误: ' + (e.message || e), 'err'); });
 }
 
-function handleData(c, data) {
-  const st = connState;
-  if (typeof data === 'string') {
-    let m; try { m = JSON.parse(data); } catch (e) { return; }
-    if (m.m === 'ping') { c.send(JSON.stringify({ m: 'pong', id: m.id })); }
-    else if (m.m === 'pong') {
-      const p = st.pingMap.get(m.id);
-      if (p) { st.pingMap.delete(m.id); p.resolve(now() - p.start); }
+function ensurePeerConn() {
+  if (peerConn && peerConn.open) {
+    return Promise.resolve(peerConn);
+  }
+  if (peerConnectingPromise) {
+    return peerConnectingPromise;
+  }
+
+  peerConnectingPromise = new Promise((resolve, reject) => {
+    const target = endpoints.targetPeerId || 'server';
+
+    const tryConnect = () => {
+      log('WebRTC', `正在建立 WebRTC 直连至服务端 [${target}]…`, 'mut');
+      const c = peer.connect(target, { serialization: 'raw', reliable: true });
+      bindPeerConn(c);
+
+      const timer = setTimeout(() => {
+        peerConnectingPromise = null;
+        reject(new Error(`连接对端 ${target} 超时，请检查服务状态与网络`));
+      }, 16000);
+
+      c.on('open', () => {
+        clearTimeout(timer);
+        peerConnectingPromise = null;
+        resolve(c);
+      });
+      c.on('error', (err) => {
+        clearTimeout(timer);
+        peerConnectingPromise = null;
+        reject(err);
+      });
+    };
+
+    if (!peerReady) {
+      log('WebRTC', '等待 Peer 信令就绪…', 'mut');
+      const waitInit = setInterval(() => {
+        if (peerReady) {
+          clearInterval(waitInit);
+          tryConnect();
+        }
+      }, 150);
+      setTimeout(() => {
+        clearInterval(waitInit);
+        if (!peerReady) {
+          peerConnectingPromise = null;
+          reject(new Error('Peer 信令初始化超时'));
+        }
+      }, 10000);
+      return;
     }
-    else if (m.m === 'req') {
-      // 对端要我们发 m.size 字节 → 发送完通知
-      sendBinary(c, m.size, () => c.send(JSON.stringify({ m: 'got', size: m.size, id: m.id })));
+
+    tryConnect();
+  });
+
+  return peerConnectingPromise;
+}
+
+async function runPeerPing() {
+  const c = await ensurePeerConn();
+  log('WebRTC', '开始 WebRTC Ping 延迟测试 (5 次)…', 'mut');
+  $('valPeerPing').innerHTML = `<span class="mut">测中…</span>`;
+
+  try {
+    const times = [];
+    for (let i = 0; i < 5; i++) {
+      const id = 'p_' + Math.random().toString(36).slice(2);
+      const dt = await new Promise((res, rej) => {
+        const timer = setTimeout(() => {
+          peerConnState.pingMap.delete(id);
+          rej(new Error('WebRTC ping 超时'));
+        }, 5000);
+        peerConnState.pingMap.set(id, {
+          start: now(),
+          resolve: (ms) => {
+            clearTimeout(timer);
+            res(ms);
+          }
+        });
+        c.send(JSON.stringify({ m: 'ping', id }));
+      });
+      times.push(dt);
+      await sleep(30);
     }
-    else if (m.m === 'send') {
-      // 对端将向我们发 m.size 字节 → 开始计数（用于上行被动接收）
-      st.expectedDownload = m.size; st.downloadReceived = 0; st.downloadId = m.id;
-    }
-    else if (m.m === 'got') {
-      // 对端已收到我们发的 m.size 字节（上行完成）
-      if (st.uploadResolve && st.uploadResolve.size === m.size) {
-        const r = st.uploadResolve;
-        st.uploadResolve = null;
-        r.resolve(now() - st.uploadStart);
-      }
-    }
-  } else {
-    // 二进制数据：累计下行字节
-    const bytes = data.byteLength !== undefined ? data.byteLength : (data.size || 0);
-    if (st.expectedDownload > 0) {
-      st.downloadReceived += bytes;
-      if (st.downloadReceived >= st.expectedDownload) {
-        c.send(JSON.stringify({ m: 'got', size: st.expectedDownload, id: st.downloadId }));
-        const r = st.downloadResolve;
-        const dt = now() - st.downloadStart;
-        st.downloadResolve = null; st.expectedDownload = 0; st.downloadReceived = 0;
-        if (r) r.resolve(dt);
-      }
-    }
+    times.sort((a, b) => a - b);
+    const avg = times.reduce((a, b) => a + b, 0) / times.length;
+    $('valPeerPing').innerHTML = `${avg.toFixed(1)}<span class="metric-unit">ms</span>`;
+    log('WebRTC', `延迟完成: avg ${avg.toFixed(1)} ms (min ${times[0].toFixed(1)} / max ${times[times.length - 1].toFixed(1)})`, 'ok');
+    return avg;
+  } catch (e) {
+    $('valPeerPing').innerHTML = `<span class="err">失败</span>`;
+    log('WebRTC', 'Ping 失败: ' + e.message, 'err');
+    throw e;
   }
 }
 
-function pingOnce(c) {
-  return new Promise((resolve, reject) => {
-    const id = Math.random().toString(36).slice(2);
-    const timer = setTimeout(() => { connState.pingMap.delete(id); reject(new Error('ping 超时')); }, 10000);
-    connState.pingMap.set(id, { start: now(), resolve: (ms) => { clearTimeout(timer); resolve(ms); } });
-    c.send(JSON.stringify({ m: 'ping', id }));
-  });
-}
+async function runPeerDownload() {
+  const c = await ensurePeerConn();
+  const size = getPayloadSize();
+  log('WebRTC', `开始 WebRTC 下行测速 (${(size / 1048576).toFixed(0)} MB)…`, 'mut');
+  $('valPeerDown').innerHTML = `0<span class="metric-unit">%</span>`;
 
-async function peerPing(n = 5) {
-  requireConn();
-  log(peerLog, `开始延迟测试（${n} 次 ping）…`, 'mut');
-  const times = [];
-  for (let i = 0; i < n; i++) {
-    try { times.push(await pingOnce(conn)); } catch (e) { log(peerLog, 'ping 失败: ' + e.message, 'err'); return null; }
-    await sleep(50);
+  try {
+    const s = now();
+    const id = 'd_' + Date.now();
+    const timeoutMs = Math.max(35000, Math.ceil((size / 1048576) * 10000));
+    await new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        peerConnState.downloadResolve = null;
+        peerConnState.expectedDownload = 0;
+        reject(new Error('WebRTC 下行超时'));
+      }, timeoutMs);
+      peerConnState.expectedDownload = size;
+      peerConnState.downloadReceived = 0;
+      peerConnState.downloadId = id;
+      peerConnState.downloadResolve = {
+        resolve: () => {
+          clearTimeout(timer);
+          resolve();
+        }
+      };
+      c.send(JSON.stringify({ m: 'req', size, id }));
+    });
+
+    const dt = now() - s;
+    const mbps = fmtMbps(size, dt);
+    $('valPeerDown').innerHTML = `${mbps}<span class="metric-unit">Mbps</span>`;
+    log('WebRTC', `下行完成: ${(size / 1048576).toFixed(1)} MB 用时 ${fmtMs(dt)} → ${mbps} Mbps`, 'ok');
+    return mbps;
+  } catch (e) {
+    $('valPeerDown').innerHTML = `<span class="err">失败</span>`;
+    log('WebRTC', '下行失败: ' + e.message, 'err');
+    throw e;
   }
-  const s = stats(times);
-  $('m_ping').innerHTML = `${s.avg.toFixed(1)} <small>ms (min ${s.min.toFixed(1)} / max ${s.max.toFixed(1)})</small>`;
-  log(peerLog, `延迟: avg ${s.avg.toFixed(1)}ms  min ${s.min.toFixed(1)}ms  max ${s.max.toFixed(1)}ms`, 'ok');
-  return s;
 }
 
-function peerDownload(size) {
-  return new Promise((resolve, reject) => {
-    requireConn();
-    const st = connState;
-    st.expectedDownload = size; st.downloadReceived = 0; st.downloadStart = now();
-    st.downloadId = Math.random().toString(36).slice(2);
-    const timer = setTimeout(() => { st.downloadResolve = null; st.expectedDownload = 0; st.downloadReceived = 0; reject(new Error('下行超时')); }, 30000);
-    st.downloadResolve = { size, resolve: (ms) => { clearTimeout(timer); resolve(ms); } };
-    conn.send(JSON.stringify({ m: 'req', size, id: st.downloadId }));
-  });
-}
+async function runPeerUpload() {
+  const c = await ensurePeerConn();
+  const size = getPayloadSize();
+  log('WebRTC', `开始 WebRTC 上行测速 (${(size / 1048576).toFixed(0)} MB)…`, 'mut');
+  $('valPeerUp').innerHTML = `0<span class="metric-unit">%</span>`;
 
-function peerUpload(size) {
-  return new Promise((resolve, reject) => {
-    requireConn();
-    const st = connState;
-    st.uploadStart = now(); st.uploadSize = size;
-    const timer = setTimeout(() => { st.uploadResolve = null; reject(new Error('上行超时')); }, 30000);
-    st.uploadResolve = { size, resolve: (ms) => { clearTimeout(timer); resolve(ms); } };
-    // 先告知对端即将接收 size 字节，再发送；对端收满后回 'got' 标记上行完成
-    conn.send(JSON.stringify({ m: 'send', size, id: st.uploadResolve.id || (st.uploadResolve.id = Math.random().toString(36).slice(2)) }));
-    sendBinary(conn, size, () => {});
-  });
-}
+  try {
+    const s = now();
+    const id = 'u_' + Date.now();
+    const timeoutMs = Math.max(35000, Math.ceil((size / 1048576) * 10000));
+    await new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        peerConnState.uploadResolve = null;
+        reject(new Error('WebRTC 上行超时'));
+      }, timeoutMs);
 
-function requireConn() {
-  if (!conn || !conn.open) throw new Error('尚未连接对端');
-}
-function guard(fn) {
-  try { fn(); } catch (e) { log(peerLog, e.message, 'err'); }
+      peerConnState.uploadId = id;
+      peerConnState.uploadResolve = {
+        size,
+        resolve: () => {
+          clearTimeout(timer);
+          resolve();
+        }
+      };
+
+      c.send(JSON.stringify({ m: 'send', size, id }));
+
+      const CHUNK = 16 * 1024;
+      const chunk = new ArrayBuffer(CHUNK);
+      new Uint8Array(chunk).fill(0x5a);
+      let sent = 0;
+      const pump = () => {
+        while (sent < size) {
+          if (c.dataChannel && c.dataChannel.bufferedAmount > 256 * 1024) {
+            setTimeout(pump, 8);
+            return;
+          }
+          const n = Math.min(CHUNK, size - sent);
+          c.send(n === CHUNK ? chunk : chunk.slice(0, n));
+          sent += n;
+          const pct = Math.min(99, Math.floor((sent / size) * 100));
+          $('valPeerUp').innerHTML = `${pct}<span class="metric-unit">%</span>`;
+        }
+      };
+      setTimeout(pump, 20);
+    });
+
+    const dt = now() - s;
+    const mbps = fmtMbps(size, dt);
+    $('valPeerUp').innerHTML = `${mbps}<span class="metric-unit">Mbps</span>`;
+    log('WebRTC', `上行完成: ${(size / 1048576).toFixed(1)} MB 用时 ${fmtMs(dt)} → ${mbps} Mbps`, 'ok');
+    return mbps;
+  } catch (e) {
+    $('valPeerUp').innerHTML = `<span class="err">失败</span>`;
+    log('WebRTC', '上行失败: ' + e.message, 'err');
+    throw e;
+  }
 }
 
 async function runPeerAll() {
-  const size = parseInt($('peerSize').value, 10);
-  const b0 = now();
-  await peerPing(5);
-  log(peerLog, `开始下行测速（${(size / 1048576).toFixed(0)} MB）…`, 'mut');
+  await runPeerPing();
+  await sleep(100);
+  await runPeerDownload();
+  await sleep(100);
+  await runPeerUpload();
+}
+
+$('btnPeerPing').onclick = () => withBusy(runPeerPing);
+$('btnPeerDown').onclick = () => withBusy(runPeerDownload);
+$('btnPeerUp').onclick = () => withBusy(runPeerUpload);
+$('btnPeerAll').onclick = () => withBusy(runPeerAll);
+
+/* ==================================================================== */
+/*  4. 全协议一键全测                                                    */
+/* ==================================================================== */
+$('btnRunAllGlobal').onclick = () => withBusy(async () => {
+  const btn = $('btnRunAllGlobal');
+  btn.innerHTML = `<span>⏳</span> 正在运行全协议测速…`;
+  log('ALL', '================ 开始全协议全景测速 ================', 'mut');
+
   try {
-    const dt = await peerDownload(size);
-    const mbps = fmtMbps(size, dt);
-    $('m_down').innerHTML = `${mbps} <small>Mbps</small>`;
-    log(peerLog, `下行: ${(size / 1048576).toFixed(1)} MB 用时 ${fmtMs(dt)} → ${mbps} Mbps`, 'ok');
-  } catch (e) { log(peerLog, '下行失败: ' + e.message, 'err'); }
+    log('ALL', '>>> [1/3] 执行 HTTP 测速…', 'http');
+    await runHttpAll();
+    await sleep(200);
 
-  log(peerLog, `开始上行测速（${(size / 1048576).toFixed(0)} MB）…`, 'mut');
-  try {
-    const dt = await peerUpload(size);
-    const mbps = fmtMbps(size, dt);
-    $('m_up').innerHTML = `${mbps} <small>Mbps</small>`;
-    log(peerLog, `上行: ${(size / 1048576).toFixed(1)} MB 用时 ${fmtMs(dt)} → ${mbps} Mbps`, 'ok');
-  } catch (e) { log(peerLog, '上行失败: ' + e.message, 'err'); }
-  log(peerLog, `全部测速完成，总用时 ${fmtMs(now() - b0)}`, 'ok');
-}
+    log('ALL', '>>> [2/3] 执行 WebSocket 测速…', 'ws');
+    await runWsAll();
+    await sleep(200);
 
-/* ---- PeerJS 事件 ---- */
-$('btnNewId').onclick = () => { $('peerId').value = ''; fillPeerCfg(); createPeer(); };
-$('peerId').onchange = () => createPeer();
-$('btnConnect').onclick = () => {
-  guard(() => {
-    const rid = $('remoteId').value.trim();
-    if (!rid) throw new Error('请先输入对端 ID');
-    if (!peerReady) createPeer();
-    const c = peer.connect(rid, { reliable: true });
-    bindConn(c);
-    log(peerLog, `正在连接 ${rid} …`, 'mut');
-  });
-};
-$('btnDisconnect').onclick = () => { if (conn) { conn.close(); conn = null; connState = null; setPeerStatus('未连接', ''); } };
-$('btnPeerPing').onclick = () => guard(() => peerPing(5));
-$('btnPeerDown').onclick = () => guard(async () => {
-  const size = parseInt($('peerSize').value, 10);
-  log(peerLog, `开始下行测速（${(size / 1048576).toFixed(0)} MB）…`, 'mut');
-  try { const dt = await peerDownload(size); const mbps = fmtMbps(size, dt);
-    $('m_down').innerHTML = `${mbps} <small>Mbps</small>`; log(peerLog, `下行 → ${mbps} Mbps (${fmtMs(dt)})`, 'ok'); }
-  catch (e) { log(peerLog, '下行失败: ' + e.message, 'err'); }
-});
-$('btnPeerUp').onclick = () => guard(async () => {
-  const size = parseInt($('peerSize').value, 10);
-  log(peerLog, `开始上行测速（${(size / 1048576).toFixed(0)} MB）…`, 'mut');
-  try { const dt = await peerUpload(size); const mbps = fmtMbps(size, dt);
-    $('m_up').innerHTML = `${mbps} <small>Mbps</small>`; log(peerLog, `上行 → ${mbps} Mbps (${fmtMs(dt)})`, 'ok'); }
-  catch (e) { log(peerLog, '上行失败: ' + e.message, 'err'); }
-});
-$('btnPeerAll').onclick = () => guard(runPeerAll);
+    log('ALL', '>>> [3/3] 执行 WebRTC 测速…', 'webrtc');
+    await runPeerAll();
 
-/* ==================================================================== */
-/*  HTTP / WS 测速                                                       */
-/* ==================================================================== */
-const httpLog = $('httpLog');
-const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-$('httpUrl').value = `${location.origin}/api/blob?size=1048576`;
-$('pingUrl').value = `${location.origin}/api/ping`;
-$('httpUploadUrl').value = `${location.origin}/api/upload`;
-$('wsUrl').value = `${proto}://${location.hostname}${location.port ? ':' + location.port : ''}/ws`;
-
-async function httpPing(url, n = 5) {
-  log(httpLog, `HTTP 延迟测试 ${url}（${n} 次）…`, 'mut');
-  const times = [];
-  for (let i = 0; i < n; i++) {
-    const s = now();
-    const r = await fetch(url, { cache: 'no-store' });
-    await r.text();
-    times.push(now() - s);
+    log('ALL', '================ 全协议测速完成！================', 'ok');
+  } catch (err) {
+    log('ALL', '测速过程中断: ' + err.message, 'err');
+  } finally {
+    btn.innerHTML = `<span>🚀</span> 全协议一键全测`;
   }
-  const st = stats(times);
-  $('m_http_ping').innerHTML = `${st.avg.toFixed(1)} <small>ms</small>`;
-  log(httpLog, `HTTP 延迟: avg ${st.avg.toFixed(1)}ms  min ${st.min.toFixed(1)}ms  max ${st.max.toFixed(1)}ms`, 'ok');
-  return st;
-}
-
-async function httpGet(url) {
-  log(httpLog, `GET 测速 ${url} …`, 'mut');
-  const s = now();
-  const res = await fetch(url, { cache: 'no-store' });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const reader = res.body.getReader();
-  let ttfb = null, total = 0;
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    if (ttfb === null) ttfb = now() - s;
-    total += value.byteLength;
-  }
-  const dt = now() - s;
-  const mbps = fmtMbps(total, dt);
-  $('m_http_ttfb').innerHTML = `${ttfb.toFixed(1)} <small>ms</small>`;
-  $('m_http_down').innerHTML = `${mbps} <small>Mbps</small>`;
-  $('m_http_status').textContent = res.status;
-  log(httpLog, `GET ${res.status}: ${(total / 1048576).toFixed(2)} MB  总 ${fmtMs(dt)}  TTFB ${ttfb.toFixed(1)}ms  → ${mbps} Mbps`, 'ok');
-  return { total, dt, ttfb };
-}
-
-// HTTP 上行：POST size 字节，按请求-响应往返计时（服务端收到即回，计时≈上传时间+RTT）
-async function httpUpload(url, size) {
-  log(httpLog, `HTTP 上行测速 ${url}（${(size / 1048576).toFixed(0)} MB）…`, 'mut');
-  const payload = new Uint8Array(size); payload.fill(0x5a);
-  const s = now();
-  const res = await fetch(url, { method: 'POST', body: payload, headers: { 'Content-Type': 'application/octet-stream' } });
-  const j = await res.json();
-  const dt = now() - s;
-  const mbps = fmtMbps(size, dt);
-  $('m_http_up').innerHTML = `${mbps} <small>Mbps</small>`;
-  $('m_http_status').textContent = res.status;
-  const got = (j && j.size !== undefined) ? j.size : null;
-  const mismatch = got !== null && got !== size ? `（服务端收到 ${(got / 1048576).toFixed(2)} MB，不一致）` : '';
-  log(httpLog, `POST ${res.status}: 发送 ${(size / 1048576).toFixed(2)} MB 总 ${fmtMs(dt)} → ${mbps} Mbps ${mismatch}`, 'ok');
-  return { dt, got };
-}
-
-let ws = null;
-function setWsStatus(txt, cls) {
-  $('m_ws_status').textContent = txt;
-  if (cls === 'ok') $('m_ws_status').style.color = 'var(--ok)';
-  else if (cls === 'err') $('m_ws_status').style.color = 'var(--err)';
-  else $('m_ws_status').style.color = '';
-}
-
-/* ---- WS 上下行协议：与 /ws 服务端约定 ---- */
-let wsState = { down: null, up: null }; // { id, size, t0, resolve } 各一
-function wireWsProtocol(w) {
-  w.addEventListener('message', (ev) => {
-    const d = ev.data;
-    // JSON 控制消息（服务端 → 客户端）：upDone
-    if (typeof d === 'string' || (d instanceof ArrayBuffer && d.byteLength < 4096)) {
-      try {
-        const m = JSON.parse(typeof d === 'string' ? d : new TextDecoder().decode(d));
-        if (m && m.m === 'upDone' && wsState.up && m.id === wsState.up.id) {
-          const st = wsState.up; wsState.up = null;
-          const dt = now() - st.t0;
-          const mbps = fmtMbps(m.size || st.size, dt);
-          $('m_ws_up').innerHTML = `${mbps} <small>Mbps</small>`;
-          log(httpLog, `WS 上行: ${((m.size || st.size) / 1048576).toFixed(1)} MB 总 ${fmtMs(dt)} → ${mbps} Mbps`, 'ok');
-          if (st.resolve) st.resolve({ dt });
-        }
-      } catch (e) { /* 非 JSON，忽略 */ }
-      return;
-    }
-    // 二进制：计入进行中的下行测速
-    if (wsState.down) {
-      const st = wsState.down;
-      st.got += (d.byteLength !== undefined ? d.byteLength : (d.size || 0));
-      if (st.got >= st.size) {
-        wsState.down = null;
-        const dt = now() - st.t0;
-        const mbps = fmtMbps(st.size, dt);
-        $('m_ws_down').innerHTML = `${mbps} <small>Mbps</small>`;
-        log(httpLog, `WS 下行: ${(st.size / 1048576).toFixed(1)} MB 总 ${fmtMs(dt)} → ${mbps} Mbps`, 'ok');
-        if (st.resolve) st.resolve({ dt });
-      }
-    }
-  });
-}
-
-// WS 下行：请求 size 字节，服务端推送，按请求→收满计时
-function wsDownload(w, size) {
-  return new Promise((resolve, reject) => {
-    const id = 'd' + Date.now();
-    wsState.down = { id, size, got: 0, t0: now(), resolve };
-    w.send(JSON.stringify({ m: 'down', size, id }));
-    setTimeout(() => { if (wsState.down && wsState.down.id === id) { wsState.down = null; reject(new Error('WS 下行超时')); } }, 30000);
-  });
-}
-
-// WS 上行：先发 upStart，再发 size 字节（分块+背压），等 upDone 计时
-function wsUpload(w, size) {
-  return new Promise((resolve, reject) => {
-    const id = 'u' + Date.now();
-    wsState.up = { id, size, t0: now(), resolve };
-    w.send(JSON.stringify({ m: 'upStart', size, id }));
-    const chunk = new ArrayBuffer(64 * 1024); new Uint8Array(chunk).fill(0x5a);
-    let sent = 0;
-    const pump = () => {
-      while (sent < size) {
-        const n = Math.min(64 * 1024, size - sent);
-        sent += n;
-        w.send(n === 64 * 1024 ? chunk : chunk.slice(0, n));
-        if (w.bufferedAmount > 8 * 1024 * 1024) { setTimeout(pump, 10); return; }
-      }
-    };
-    pump();
-    setTimeout(() => { if (wsState.up && wsState.up.id === id) { wsState.up = null; reject(new Error('WS 上行超时')); } }, 30000);
-  });
-}
-
-function wsConnect(url) {
-  return new Promise((resolve, reject) => {
-    const s = now();
-    const w = new WebSocket(url);
-    w.binaryType = 'arraybuffer';
-    w.onopen = () => { $('m_ws_conn').innerHTML = `${(now() - s).toFixed(1)} <small>ms</small>`; setWsStatus('已连接', 'ok'); log(httpLog, `WS 已连接 ${url}（${(now() - s).toFixed(1)}ms）`, 'ok'); wireWsProtocol(w); resolve(w); };
-    w.onerror = () => { setWsStatus('错误', 'err'); reject(new Error('WS 连接失败: ' + url)); };
-  });
-}
-function wsPing(w, n = 5) {
-  return new Promise((resolve, reject) => {
-    const times = []; let i = 0; let last = 0;
-    const onMsg = (ev) => {
-      times.push(now() - last);
-      if (++i >= n) { w.removeEventListener('message', onMsg); const st = stats(times);
-        $('m_ws_ping').innerHTML = `${st.avg.toFixed(1)} <small>ms</small>`;
-        log(httpLog, `WS 延迟: avg ${st.avg.toFixed(1)}ms  min ${st.min.toFixed(1)}ms  max ${st.max.toFixed(1)}ms`, 'ok'); resolve(st); }
-      else { last = now(); w.send(JSON.stringify({ m: 'ping' })); }
-    };
-    w.addEventListener('message', onMsg);
-    last = now();
-    w.send(JSON.stringify({ m: 'ping' }));
-    setTimeout(() => reject(new Error('WS ping 超时')), 10000);
-  });
-}
-function wsSpeed(w, size) {
-  return new Promise((resolve, reject) => {
-    const buf = new ArrayBuffer(size); new Uint8Array(buf).fill(0x5a);
-    const s = now(); let received = 0;
-    const onMsg = (ev) => {
-      received += ev.data.byteLength !== undefined ? ev.data.byteLength : (ev.data.size || 0);
-      if (received >= size) {
-        w.removeEventListener('message', onMsg);
-        const dt = now() - s;
-        const mbps = fmtMbps(received, dt);
-        $('m_ws_speed').innerHTML = `${mbps} <small>Mbps</small>`;
-        log(httpLog, `WS 回显吞吐: ${(received / 1048576).toFixed(1)} MB 往返 ${fmtMs(dt)} → ${mbps} Mbps`, 'ok');
-        resolve({ received, dt });
-      }
-    };
-    w.addEventListener('message', onMsg);
-    w.send(buf);
-    setTimeout(() => { w.removeEventListener('message', onMsg); reject(new Error('WS 测速超时')); }, 30000);
-  });
-}
-
-$('btnHttpPing').onclick = () => { const u = $('pingUrl').value.trim(); if (!u) return; httpPing(u).catch(e => log(httpLog, 'HTTP 延迟失败: ' + e.message, 'err')); };
-$('btnHttpGet').onclick = () => { const u = $('httpUrl').value.trim(); if (!u) return; httpGet(u).catch(e => log(httpLog, 'GET 失败: ' + e.message, 'err')); };
-$('btnHttpUp').onclick = () => { const u = $('httpUploadUrl').value.trim(); if (!u) return; httpUpload(u, parseInt($('httpSize').value, 10)).catch(e => log(httpLog, 'HTTP 上行失败: ' + e.message, 'err')); };
-$('btnHttpStop').onclick = () => { /* fetch 不可中断，占位 */ log(httpLog, '（当前实现未支持中断进行中的 fetch）', 'mut'); };
-$('btnWsConnect').onclick = () => { if (ws) ws.close(); wsConnect($('wsUrl').value.trim()).then(w => { ws = w; }).catch(e => log(httpLog, e.message, 'err')); };
-$('btnWsDisconnect').onclick = () => { if (ws) { ws.close(); ws = null; setWsStatus('未连接', ''); } };
-$('btnWsPing').onclick = () => { if (!ws) { log(httpLog, '先连接 WS', 'warn'); return; } wsPing(ws).catch(e => log(httpLog, e.message, 'err')); };
-$('btnWsDown').onclick = () => { if (!ws) { log(httpLog, '先连接 WS', 'warn'); return; } wsDownload(ws, parseInt($('wsSize').value, 10)).catch(e => log(httpLog, e.message, 'err')); };
-$('btnWsUp').onclick = () => { if (!ws) { log(httpLog, '先连接 WS', 'warn'); return; } wsUpload(ws, parseInt($('wsSize').value, 10)).catch(e => log(httpLog, e.message, 'err')); };
-$('btnWsSpeed').onclick = () => { if (!ws) { log(httpLog, '先连接 WS', 'warn'); return; } wsSpeed(ws, parseInt($('wsSize').value, 10)).catch(e => log(httpLog, e.message, 'err')); };
+});
 
 /* ==================================================================== */
-/*  启动                                                                 */
+/*  初始化页面并探测服务                                                 */
 /* ==================================================================== */
+parseAndApplyServerUrl(location.origin);
+
 fetch('/api/info').then(r => r.json()).then(info => {
-  $('srv').innerHTML = `<span class="dot ok"></span> 服务运行中 · 端口 ${info.port} · peer ${info.peerPath} · ws ${info.wsPath}`;
-}).catch(() => { $('srv').innerHTML = `<span class="dot"></span> 服务未连接`; });
-
-fillPeerCfg();
-createPeer();
-log(httpLog, '页面就绪。输入目标地址后点击对应测试按钮。', 'mut');
+  $('serverBadge').innerHTML = `<span class="dot ok"></span> <span>服务运行中 (端口: ${info.port} · Peer ID: ${info.serverPeerId || 'server'})</span>`;
+  if (info.serverPeerId) {
+    endpoints.targetPeerId = info.serverPeerId;
+    $('endpointPeer').textContent = `DataChannel ↔ ${info.serverPeerId}`;
+  }
+  log('ALL', `已连接 netbench 服务端，内置 WebRTC 测速节点: ${info.serverPeerId || 'server'}`, 'ok');
+}).catch(() => {
+  $('serverBadge').innerHTML = `<span class="dot"></span> <span>服务探测中</span>`;
+});
 </script>
 </body>
 </html>
