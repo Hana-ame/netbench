@@ -495,6 +495,13 @@ let endpoints = {
   targetPeerId: 'server'
 };
 
+// ICE 服务器：默认 STUN；启动时从 /api/info 拉取服务器实际配置（含 TURN，跨 NAT 必需）
+const DEFAULT_ICE_SERVERS = [
+  { urls: 'stun:stun.l.google.com:19302' },
+  { urls: 'stun:stun1.l.google.com:19302' },
+  { urls: 'stun:stun.cloudflare.com:3478' },
+];
+
 function parseAndApplyServerUrl(inputUrl) {
   let u;
   try {
@@ -928,11 +935,7 @@ function initPeer() {
     secure: endpoints.peerSecure,
     debug: 0,
     config: {
-      iceServers: [
-        { urls: 'stun:stun.l.google.com:19302' },
-        { urls: 'stun:stun1.l.google.com:19302' },
-        { urls: 'stun:stun.cloudflare.com:3478' }
-      ]
+      iceServers: (window.__srvIce && window.__srvIce.length) ? window.__srvIce : DEFAULT_ICE_SERVERS
     }
   });
 
@@ -1252,18 +1255,25 @@ $('btnRunAllGlobal').onclick = () => withBusy(async () => {
 /* ==================================================================== */
 /*  初始化页面并探测服务                                                 */
 /* ==================================================================== */
-parseAndApplyServerUrl(location.origin);
-
-fetch('/api/info').then(r => r.json()).then(info => {
-  $('serverBadge').innerHTML = `<span class="dot ok"></span> <span>服务运行中 (端口: ${info.port} · Peer ID: ${info.serverPeerId || 'server'})</span>`;
-  if (info.serverPeerId) {
-    endpoints.targetPeerId = info.serverPeerId;
-    $('endpointPeer').textContent = `DataChannel ↔ ${info.serverPeerId}`;
+// 先取 /api/info（拿到服务器实际 ICE 配置含 TURN），再初始化 Peer，
+// 避免 Peer 先以纯 STUN 创建导致跨 NAT 必现的连接超时
+(async () => {
+  let infoOk = false;
+  try {
+    const info = await fetch('/api/info').then((r) => r.json());
+    if (Array.isArray(info.iceServers) && info.iceServers.length) {
+      window.__srvIce = info.iceServers;
+    }
+    if (info.serverPeerId) endpoints.targetPeerId = info.serverPeerId;
+    $('serverBadge').innerHTML = `<span class="dot ok"></span> <span>服务运行中 (端口: ${info.port} · Peer ID: ${info.serverPeerId || 'server'})</span>`;
+    log('ALL', `已连接 netbench 服务端，内置 WebRTC 测速节点: ${info.serverPeerId || 'server'} (ICE: ${(info.iceServers || []).length} 个服务器)`, 'ok');
+    infoOk = true;
+  } catch (e) {
+    $('serverBadge').innerHTML = `<span class="dot"></span> <span>服务探测中</span>`;
   }
-  log('ALL', `已连接 netbench 服务端，内置 WebRTC 测速节点: ${info.serverPeerId || 'server'}`, 'ok');
-}).catch(() => {
-  $('serverBadge').innerHTML = `<span class="dot"></span> <span>服务探测中</span>`;
-});
+  parseAndApplyServerUrl(location.origin);
+  if (!infoOk) log('ALL', '未能获取 /api/info，使用默认 STUN ICE 配置', 'warn');
+})();
 </script>
 </body>
 </html>

@@ -25,6 +25,36 @@ const HOST = process.env.HOST || '0.0.0.0';
 const DEBUG = !!process.env.DEBUG;
 const SERVER_PEER_ID = process.env.SERVER_PEER_ID || 'server';
 
+/* ------------------------------------------------------------------ */
+/* ICE 服务器配置：默认 STUN；跨 NAT / CGNAT 必须配 TURN，否则连接必现    */
+/* 16s 超时（纯 STUN 在对称 NAT 下无法打通）。环境变量注入：            */
+/*   ICE_SERVERS=JSON 数组（完整覆盖默认 ICE 列表）                     */
+/*   TURN_URLS=turns://host:5349,turn:host:3478（逗号分隔，追加）       */
+/*   TURN_USERNAME / TURN_CREDENTIAL（配合 TURN_URLS）                  */
+/* ------------------------------------------------------------------ */
+const DEFAULT_ICE_SERVERS = [
+  { urls: 'stun:stun.l.google.com:19302' },
+  { urls: 'stun:stun1.l.google.com:19302' },
+  { urls: 'stun:stun.cloudflare.com:3478' },
+];
+function buildIceServers() {
+  try {
+    const v = JSON.parse(process.env.ICE_SERVERS || 'null');
+    if (Array.isArray(v) && v.length) return v;
+  } catch (e) { /* 忽略非法 JSON，回落默认 */ }
+  const list = DEFAULT_ICE_SERVERS.slice();
+  const turnUrls = (process.env.TURN_URLS || '').split(',').map((s) => s.trim()).filter(Boolean);
+  if (turnUrls.length) {
+    const turn = { urls: turnUrls };
+    if (process.env.TURN_USERNAME) turn.username = process.env.TURN_USERNAME;
+    if (process.env.TURN_CREDENTIAL) turn.credential = process.env.TURN_CREDENTIAL;
+    list.push(turn);
+  }
+  return list;
+}
+const ICE_SERVERS = buildIceServers();
+console.log(`[server-peer] ICE servers: ${ICE_SERVERS.map((i) => i.urls).join(' | ')}`);
+
 // Polyfill WebRTC and WebSocket for server-side PeerJS WebRTC peer
 try {
   const nodeDataChannel = require('node-datachannel');
@@ -168,6 +198,7 @@ app.get('/api/info', (req, res) => {
     serverPeerId: SERVER_PEER_ID,
     wsPath: '/ws',
     uploadPath: '/api/upload',
+    iceServers: ICE_SERVERS,
   });
 });
 
@@ -258,11 +289,7 @@ function initServerPeer() {
         port: PORT,
         path: '/peerjs',
         config: {
-          iceServers: [
-            { urls: 'stun:stun.l.google.com:19302' },
-            { urls: 'stun:stun1.l.google.com:19302' },
-            { urls: 'stun:stun.cloudflare.com:3478' },
-          ],
+          iceServers: ICE_SERVERS,
         },
         debug: DEBUG ? 2 : 0,
       });

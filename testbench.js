@@ -79,6 +79,18 @@ function httpRequest(options, data = null) {
   });
 }
 
+function httpGetJson(path) {
+  return new Promise((resolve, reject) => {
+    const req = http.request({ hostname: HOST, port: PORT, path, method: 'GET' }, (res) => {
+      let body = '';
+      res.on('data', (c) => (body += c));
+      res.on('end', () => { try { resolve(JSON.parse(body)); } catch (e) { reject(new Error('invalid JSON from ' + path)); } });
+    });
+    req.on('error', reject);
+    req.end();
+  });
+}
+
 // 1. HTTP Latency Ping
 async function benchmarkHttpPing(rounds = 10) {
   process.stdout.write(`\n[1/7] Running HTTP Ping benchmark (${rounds} rounds)... `);
@@ -269,14 +281,17 @@ function runWsSuite() {
 // 5. PeerJS WebRTC DataChannel (Client ↔ Server Peer)
 async function benchmarkPeerJsWebRtc() {
   console.log('\n[7/7] Running PeerJS WebRTC DataChannel benchmark (Client ↔ Server Peer)...');
+  // 与页面一致：从 /api/info 取服务器 ICE 配置（含 TURN，跨 NAT 必需）
+  const info = await httpGetJson('/api/info').catch(() => null);
+  const ICE = (info && Array.isArray(info.iceServers) && info.iceServers.length)
+    ? info.iceServers
+    : [{ urls: 'stun:stun.l.google.com:19302' }];
   return new Promise((resolve, reject) => {
     const cli = new Peer({
       host: HOST,
       port: PORT,
       path: '/peerjs',
-      config: {
-        iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
-      },
+      config: { iceServers: ICE },
       debug: 0,
     });
 

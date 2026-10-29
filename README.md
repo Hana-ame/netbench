@@ -38,6 +38,11 @@ npm start
   - `PORT=8080`：修改监听端口（默认 8080）。
   - `HOST=0.0.0.0`：绑定网络地址。
   - `DEBUG=1`：开启详细 PeerJS 与 WebRTC 调试日志。
+  - **ICE / TURN（跨 NAT 关键）**：
+    - `ICE_SERVERS`：JSON 数组，完整覆盖默认 ICE 列表（默认 = google/cloudflare 三个 STUN）。
+    - `TURN_URLS=turns://host:5349,turn:host:3478`：逗号分隔追加 TURN 服务器（跨对称 NAT / CGNAT 必须配 TURN，否则 WebRTC 直连必现 16s 超时）。
+    - `TURN_USERNAME` / `TURN_CREDENTIAL`：TURN 认证凭据（与 `TURN_URLS` 配合）。
+    - 页面与 testbench 会自动从 `/api/info` 读取服务器实际 ICE 配置，保持一致。
 
 ### 方式 2：Docker 运行
 
