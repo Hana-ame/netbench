@@ -322,6 +322,7 @@ async function benchmarkPeerJsWebRtc() {
           for (const size of [1 * 1024 * 1024, 4 * 1024 * 1024]) {
             const label = `${size / (1024 * 1024)} MB`;
             let received = 0;
+            let ackBatch = 0;
             const t0 = process.hrtime();
             const reqId = `req_${size}_${Date.now()}`;
 
@@ -330,10 +331,19 @@ async function benchmarkPeerJsWebRtc() {
                 if (typeof data !== 'string') {
                   const bytes = data.byteLength !== undefined ? data.byteLength : (data.length || 0);
                   received += bytes;
+                  ackBatch += bytes;
+                  if (ackBatch >= 32768 || received >= size) {
+                    ackBatch = 0;
+                    conn.send(JSON.stringify({ m: 'ack', id: reqId, got: received }));
+                  }
+                  if (received >= size) {
+                    conn.off('data', onChunk);
+                    res();
+                  }
                 } else {
                   try {
                     const m = JSON.parse(data);
-                    if (m.m === 'got' && m.size === size) {
+                    if (m.m === 'got' && m.id === reqId) {
                       conn.off('data', onChunk);
                       res();
                     }
@@ -341,7 +351,7 @@ async function benchmarkPeerJsWebRtc() {
                 }
               };
               conn.on('data', onChunk);
-              conn.send(JSON.stringify({ m: 'req', size, id: reqId }));
+              conn.send(JSON.stringify({ m: 'req', size, id: reqId, window: 16 }));
             });
 
             const dur = hrtimeToMs(process.hrtime(t0));
@@ -349,20 +359,35 @@ async function benchmarkPeerJsWebRtc() {
           }
 
           // WebRTC Upload
-          const CHUNK = 64 * 1024;
+          const CHUNK = 16 * 1024;
           const chunkBuf = Buffer.alloc(CHUNK, 0x5a);
 
           for (const size of [1 * 1024 * 1024, 4 * 1024 * 1024]) {
             const label = `${size / (1024 * 1024)} MB`;
             const t0 = process.hrtime();
             const upId = `up_${size}_${Date.now()}`;
+            const maxInFlight = 16 * CHUNK;
 
             await new Promise((res) => {
+              let sent = 0;
+              let acked = 0;
+
+              const pump = () => {
+                while (sent < size && (sent - acked) < maxInFlight) {
+                  const n = Math.min(CHUNK, size - sent);
+                  conn.send(n === CHUNK ? chunkBuf : chunkBuf.subarray(0, n));
+                  sent += n;
+                }
+              };
+
               const onGot = (data) => {
                 if (typeof data === 'string') {
                   try {
                     const m = JSON.parse(data);
-                    if (m.m === 'got' && m.size === size) {
+                    if (m.m === 'ack' && m.id === upId) {
+                      acked = m.got;
+                      pump();
+                    } else if (m.m === 'got' && m.id === upId) {
                       conn.off('data', onGot);
                       res();
                     }
@@ -370,20 +395,7 @@ async function benchmarkPeerJsWebRtc() {
                 }
               };
               conn.on('data', onGot);
-              conn.send(JSON.stringify({ m: 'send', size, id: upId }));
-
-              let sent = 0;
-              const pump = () => {
-                while (sent < size) {
-                  const n = Math.min(CHUNK, size - sent);
-                  conn.send(n === CHUNK ? chunkBuf : chunkBuf.subarray(0, n));
-                  sent += n;
-                  if (conn.dataChannel && conn.dataChannel.bufferedAmount > 4 * 1024 * 1024) {
-                    setTimeout(pump, 5);
-                    return;
-                  }
-                }
-              };
+              conn.send(JSON.stringify({ m: 'send', size, id: upId, window: 16 }));
               pump();
             });
 

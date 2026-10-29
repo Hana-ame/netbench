@@ -260,60 +260,74 @@ function initServerPeer() {
 
       srvPeer.on('connection', (c) => {
         console.log(`[server-peer] + browser client connected: ${c.peer}`);
-        let upMode = null;
-
-        const sendBinary = (size, onDone) => {
-          let offset = 0;
-          let inFlight = 0;
-          const pump = () => {
-            if (!c.open) return;
-            while (offset < size) {
-              const n = Math.min(CHUNK, size - offset);
-              c.send(n === CHUNK ? chunkBuf : chunkBuf.subarray(0, n));
-              offset += n;
-              inFlight += n;
-              if (c.dataChannel && c.dataChannel.bufferedAmount > 256 * 1024) {
-                setTimeout(pump, 5);
-                return;
-              }
-              if (inFlight >= 256 * 1024) {
-                inFlight = 0;
-                setTimeout(pump, 1);
-                return;
-              }
-            }
-            if (onDone) onDone();
-          };
-          pump();
-        };
+        let downSession = null;
+        let upSession = null;
 
         c.on('data', (data) => {
           if (typeof data === 'string') {
-            console.log(`[server-peer] text from ${c.peer}: ${data.slice(0, 120)}`);
             let m;
             try { m = JSON.parse(data); } catch (e) { return; }
             if (m && m.m === 'ping') {
               c.send(JSON.stringify({ m: 'pong', id: m.id }));
             } else if (m && m.m === 'req') {
               console.log(`[server-peer] start downlink test for ${c.peer}, size=${m.size}`);
-              // 客户端请求下行数据流（服务端发送 m.size 字节）
-              sendBinary(m.size, () => {
-                console.log(`[server-peer] downlink stream complete for ${c.peer}, sending got`);
-                c.send(JSON.stringify({ m: 'got', size: m.size, id: m.id }));
-              });
+              const windowSize = (m.window || 16) * CHUNK;
+              let sent = 0;
+              let acked = 0;
+              let watchdogTimer = null;
+
+              const pump = () => {
+                if (!c.open) { clearTimeout(watchdogTimer); return; }
+                while (sent < m.size && (sent - acked) < windowSize) {
+                  const n = Math.min(CHUNK, m.size - sent);
+                  c.send(n === CHUNK ? chunkBuf : chunkBuf.subarray(0, n));
+                  sent += n;
+                }
+                if (sent >= m.size && acked >= m.size) {
+                  clearTimeout(watchdogTimer);
+                  console.log(`[server-peer] downlink stream complete for ${c.peer}, sending got`);
+                  c.send(JSON.stringify({ m: 'got', size: m.size, id: m.id }));
+                  downSession = null;
+                  return;
+                }
+                // Watchdog: 如果对端未发 ACK（如旧版客户端测试），在 40ms 后自动推进以防挂起
+                clearTimeout(watchdogTimer);
+                if (sent < m.size && (sent - acked) >= windowSize) {
+                  watchdogTimer = setTimeout(() => {
+                    acked = sent;
+                    pump();
+                  }, 40);
+                }
+              };
+
+              downSession = {
+                id: m.id,
+                size: m.size,
+                onAck: (got) => {
+                  acked = Math.max(acked, got);
+                  pump();
+                }
+              };
+              pump();
+            } else if (m && m.m === 'ack' && downSession && m.id === downSession.id) {
+              downSession.onAck(m.got || 0);
             } else if (m && m.m === 'send') {
               console.log(`[server-peer] start uplink test for ${c.peer}, size=${m.size}`);
-              // 客户端请求上行数据流（服务端接收 m.size 字节）
-              upMode = { size: m.size, id: m.id, got: 0 };
+              upSession = { size: m.size, id: m.id, got: 0, ackBatch: 0 };
             }
           } else {
             const bytes = data.byteLength !== undefined ? data.byteLength : (data.length || 0);
-            if (upMode) {
-              upMode.got += bytes;
-              if (upMode.got >= upMode.size) {
-                console.log(`[server-peer] uplink stream complete for ${c.peer}, got=${upMode.got}`);
-                c.send(JSON.stringify({ m: 'got', size: upMode.size, id: upMode.id }));
-                upMode = null;
+            if (upSession) {
+              upSession.got += bytes;
+              upSession.ackBatch += bytes;
+              if (upSession.ackBatch >= 32768 || upSession.got >= upSession.size) {
+                upSession.ackBatch = 0;
+                c.send(JSON.stringify({ m: 'ack', id: upSession.id, got: upSession.got }));
+              }
+              if (upSession.got >= upSession.size) {
+                console.log(`[server-peer] uplink stream complete for ${c.peer}, got=${upSession.got}`);
+                c.send(JSON.stringify({ m: 'got', size: upSession.size, id: upSession.id }));
+                upSession = null;
               }
             }
           }
@@ -321,6 +335,8 @@ function initServerPeer() {
 
         c.on('close', () => {
           console.log(`[server-peer] - browser client disconnected: ${c.peer}`);
+          downSession = null;
+          upSession = null;
         });
 
         c.on('error', (err) => {
