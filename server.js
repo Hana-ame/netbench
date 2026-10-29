@@ -27,6 +27,19 @@ const SERVER_PEER_ID = process.env.SERVER_PEER_ID || 'server';
 
 // Polyfill WebRTC and WebSocket for server-side PeerJS WebRTC peer
 try {
+  const nodeDataChannel = require('node-datachannel');
+  // 核心解除 SCTP 拥塞瓶颈：将底层收发缓冲区由默认几百 KB 扩大至 64 MB
+  if (typeof nodeDataChannel.setSctpSettings === 'function') {
+    nodeDataChannel.setSctpSettings({
+      sendBufferSize: 64 * 1024 * 1024, // 64 MB 发送缓冲
+      recvBufferSize: 64 * 1024 * 1024, // 64 MB 接收缓冲
+      maxChunksOnQueue: 262144,
+      initialCongestionWindow: 256,
+      maxBurst: 64,
+    });
+    console.log('[server-peer] SCTP 64MB buffers & high-speed congestion window applied [OK]');
+  }
+
   const poly = require('node-datachannel/polyfill');
   Object.assign(global, poly);
   global.WebSocket = WebSocket;
@@ -271,7 +284,7 @@ function initServerPeer() {
               c.send(JSON.stringify({ m: 'pong', id: m.id }));
             } else if (m && m.m === 'req') {
               console.log(`[server-peer] start downlink test for ${c.peer}, size=${m.size}`);
-              const windowSize = (m.window || 16) * CHUNK;
+              const windowSize = m.window ? (m.window * CHUNK) : Math.min(m.size, 16 * 1024 * 1024);
               let sent = 0;
               let acked = 0;
               let watchdogTimer = null;
@@ -290,13 +303,13 @@ function initServerPeer() {
                   downSession = null;
                   return;
                 }
-                // Watchdog: 如果对端未发 ACK（如旧版客户端测试），在 40ms 后自动推进以防挂起
+                // Watchdog: 如果对端 ACK 迟延或未发，20ms 后自动推进，确保高带宽吞吐不卡顿
                 clearTimeout(watchdogTimer);
                 if (sent < m.size && (sent - acked) >= windowSize) {
                   watchdogTimer = setTimeout(() => {
                     acked = sent;
                     pump();
-                  }, 40);
+                  }, 20);
                 }
               };
 
@@ -320,7 +333,8 @@ function initServerPeer() {
             if (upSession) {
               upSession.got += bytes;
               upSession.ackBatch += bytes;
-              if (upSession.ackBatch >= 32768 || upSession.got >= upSession.size) {
+              // 聚合 ACK：每累积 256KB 或收满才回一次 ACK，减少反向链路拥塞
+              if (upSession.ackBatch >= 256 * 1024 || upSession.got >= upSession.size) {
                 upSession.ackBatch = 0;
                 c.send(JSON.stringify({ m: 'ack', id: upSession.id, got: upSession.got }));
               }

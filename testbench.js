@@ -332,7 +332,7 @@ async function benchmarkPeerJsWebRtc() {
                   const bytes = data.byteLength !== undefined ? data.byteLength : (data.length || 0);
                   received += bytes;
                   ackBatch += bytes;
-                  if (ackBatch >= 32768 || received >= size) {
+                  if (ackBatch >= 256 * 1024 || received >= size) {
                     ackBatch = 0;
                     conn.send(JSON.stringify({ m: 'ack', id: reqId, got: received }));
                   }
@@ -351,7 +351,7 @@ async function benchmarkPeerJsWebRtc() {
                 }
               };
               conn.on('data', onChunk);
-              conn.send(JSON.stringify({ m: 'req', size, id: reqId, window: 16 }));
+              conn.send(JSON.stringify({ m: 'req', size, id: reqId, window: Math.min(512, Math.ceil(size / 16384)) }));
             });
 
             const dur = hrtimeToMs(process.hrtime(t0));
@@ -366,7 +366,7 @@ async function benchmarkPeerJsWebRtc() {
             const label = `${size / (1024 * 1024)} MB`;
             const t0 = process.hrtime();
             const upId = `up_${size}_${Date.now()}`;
-            const maxInFlight = 16 * CHUNK;
+            const maxInFlight = Math.min(size, 8 * 1024 * 1024);
 
             await new Promise((res) => {
               let sent = 0;

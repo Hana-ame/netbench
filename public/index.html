@@ -1000,8 +1000,8 @@ function bindPeerConn(c) {
         const pct = Math.min(99, Math.floor((st.downloadReceived / st.expectedDownload) * 100));
         $('valPeerDown').innerHTML = `${pct}<span class="metric-unit">%</span>`;
 
-        // 滑动窗口确认：每累积 32KB 或收满时向服务端发送 ACK
-        if (st.downloadAckBatch >= 32768 || st.downloadReceived >= st.expectedDownload) {
+        // 滑动窗口确认：每累积 256KB 或收满时向服务端发送 ACK，大幅降低反向 ACK 开销
+        if (st.downloadAckBatch >= 256 * 1024 || st.downloadReceived >= st.expectedDownload) {
           st.downloadAckBatch = 0;
           c.send(JSON.stringify({ m: 'ack', id: st.downloadId, got: st.downloadReceived }));
         }
@@ -1144,8 +1144,9 @@ async function runPeerDownload() {
           resolve();
         }
       };
-      // 开启滑动窗口排队流控请求 (16 chunks = 256KB in flight)
-      c.send(JSON.stringify({ m: 'req', size, id, window: 16 }));
+      // 开启大窗口流水线流控 (允许整包/最大 16MB in flight，完全释放高延迟大带宽吞吐)
+      const winChunks = Math.min(1024, Math.max(64, Math.ceil(size / 16384)));
+      c.send(JSON.stringify({ m: 'req', size, id, window: winChunks }));
     });
 
     const dt = now() - s;
@@ -1192,7 +1193,7 @@ async function runPeerUpload() {
       new Uint8Array(chunk).fill(0x5a);
       let sent = 0;
       let acked = 0;
-      const windowSize = 16 * CHUNK;
+      const windowSize = Math.min(size, 16 * 1024 * 1024); // 最大 16MB in-flight
 
       const pump = () => {
         while (sent < size && (sent - acked) < windowSize) {
@@ -1215,7 +1216,7 @@ async function runPeerUpload() {
         }
       };
 
-      c.send(JSON.stringify({ m: 'send', size, id, window: 16 }));
+      c.send(JSON.stringify({ m: 'send', size, id, window: Math.min(1024, Math.ceil(size / 16384)) }));
       pump();
     });
 
